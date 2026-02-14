@@ -55,10 +55,6 @@ export default function SignInPageRoute() {
     }
   };
 
-  const handleGoogleSignIn = () => {
-    signIn("google", { callbackUrl: "/dashboard" });
-  };
-
   return (
     <div className="bg-background text-foreground">
       {error && (
@@ -70,7 +66,6 @@ export default function SignInPageRoute() {
         heroImageSrc="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=2160&q=80"
         testimonials={sampleTestimonials}
         onSignIn={handleSignIn}
-        onGoogleSignIn={handleGoogleSignIn}
       />
     </div>
   );
