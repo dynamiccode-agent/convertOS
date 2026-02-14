@@ -57,3 +57,131 @@ model VerificationToken {
 
   @@unique([identifier, token])
 }
+
+// Meta Ads Intelligence Models
+
+model MetaAdAccount {
+  id            String    @id @default(cuid())
+  accountId     String    @unique
+  name          String
+  currency      String?
+  timezone      String?
+  accountStatus Int?
+  lastSyncedAt  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model MetaCampaign {
+  id              String    @id @default(cuid())
+  campaignId      String    @unique
+  accountId       String
+  name            String
+  objective       String?
+  status          String?
+  effectiveStatus String?
+  dailyBudget     String?
+  lifetimeBudget  String?
+  budgetRemaining String?
+  createdTime     DateTime?
+  startTime       DateTime?
+  stopTime        DateTime?
+  lastSyncedAt    DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([accountId])
+}
+
+model MetaAdSet {
+  id               String    @id @default(cuid())
+  adsetId          String    @unique
+  campaignId       String
+  accountId        String
+  name             String
+  status           String?
+  effectiveStatus  String?
+  optimizationGoal String?
+  bidStrategy      String?
+  dailyBudget      String?
+  lifetimeBudget   String?
+  createdTime      DateTime?
+  startTime        DateTime?
+  endTime          DateTime?
+  lastSyncedAt     DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([campaignId])
+  @@index([accountId])
+}
+
+model MetaAd {
+  id               String    @id @default(cuid())
+  adId             String    @unique
+  adsetId          String
+  campaignId       String
+  accountId        String
+  name             String
+  status           String?
+  effectiveStatus  String?
+  creativeId       String?
+  creativeTitle    String?
+  creativeBody     String?
+  creativeImageUrl String?
+  createdTime      DateTime?
+  lastSyncedAt     DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([adsetId])
+  @@index([campaignId])
+  @@index([accountId])
+}
+
+model MetaInsight {
+  id               String   @id @default(cuid())
+  entityId         String
+  entityType       String
+  dateStart        DateTime
+  dateStop         DateTime
+  spend            Decimal? @db.Decimal(10, 2)
+  impressions      Int?
+  clicks           Int?
+  reach            Int?
+  frequency        Decimal? @db.Decimal(10, 2)
+  ctr              Decimal? @db.Decimal(10, 4)
+  cpc              Decimal? @db.Decimal(10, 2)
+  cpm              Decimal? @db.Decimal(10, 2)
+  leads            Int?
+  purchases        Int?
+  costPerLead      Decimal? @db.Decimal(10, 2)
+  costPerPurchase  Decimal? @db.Decimal(10, 2)
+  linkClicks       Int?
+  landingPageViews Int?
+  postEngagements  Int?
+  videoViews       Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([entityId, entityType, dateStart, dateStop])
+  @@index([entityId, entityType])
+  @@index([dateStart, dateStop])
+}
+
+model MetaAuditLog {
+  id           String   @id @default(cuid())
+  action       String
+  entityType   String
+  entityId     String
+  performedBy  String
+  changes      Json?
+  reason       String?
+  status       String
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([performedBy])
+  @@index([createdAt])
+}
