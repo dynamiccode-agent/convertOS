@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import AccountSidebar from "./AccountSidebar";
 
 interface DashboardContentProps {
@@ -8,8 +8,95 @@ interface DashboardContentProps {
   userName?: string | null;
 }
 
+interface Summary {
+  totalSpend: string;
+  totalLeads: number;
+  totalPurchases: number;
+  totalCampaigns: number;
+  avgCTR: string;
+  costPerLead: string;
+  costPerPurchase: string;
+}
+
+interface Campaign {
+  id: string;
+  campaignId: string;
+  name: string;
+  status?: string;
+  effectiveStatus?: string;
+  dailyBudget?: string;
+  lifetimeBudget?: string;
+  metrics?: {
+    spend?: number;
+    leads?: number;
+    purchases?: number;
+    impressions?: number;
+    clicks?: number;
+    ctr?: number;
+    costPerLead?: number;
+    costPerPurchase?: number;
+  };
+}
+
 export default function DashboardContent({ userEmail, userName }: DashboardContentProps) {
   const [selectedAccount, setSelectedAccount] = useState<string>("all");
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [lastSynced, setLastSynced] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchData();
+  }, [selectedAccount]);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      // Fetch summary
+      const summaryRes = await fetch(`/api/meta-ads/summary?accountId=${selectedAccount}`);
+      const summaryData = await summaryRes.json();
+      if (summaryData.success) {
+        setSummary(summaryData.summary);
+      }
+
+      // Fetch campaigns
+      const campaignsRes = await fetch(`/api/meta-ads/campaigns?accountId=${selectedAccount}`);
+      const campaignsData = await campaignsRes.json();
+      if (campaignsData.success) {
+        setCampaigns(campaignsData.campaigns);
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const response = await fetch('/api/meta-ads/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ datePreset: 'last_7d' }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setLastSynced(new Date().toLocaleString());
+        await fetchData();
+        alert('Data synced successfully!');
+      } else {
+        alert('Sync failed: ' + data.error);
+      }
+    } catch (error) {
+      console.error('Sync error:', error);
+      alert('Sync failed');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
@@ -24,16 +111,29 @@ export default function DashboardContent({ userEmail, userName }: DashboardConte
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-          <div className="px-6 py-4">
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-              {selectedAccount === "all" ? "Dashboard" : "Account Dashboard"}
-            </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {selectedAccount === "all" 
-                ? `Welcome back, ${userName || userEmail?.split('@')[0]}`
-                : "Viewing selected account metrics"
-              }
-            </p>
+          <div className="px-6 py-4 flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
+                {selectedAccount === "all" ? "Dashboard" : "Account Dashboard"}
+              </h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                {selectedAccount === "all" 
+                  ? `Welcome back, ${userName || userEmail?.split('@')[0]}`
+                  : "Viewing selected account metrics"
+                }
+                {lastSynced && <span className="ml-3">• Last synced: {lastSynced}</span>}
+              </p>
+            </div>
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <svg className={`h-5 w-5 ${syncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {syncing ? 'Syncing...' : 'Sync Data'}
+            </button>
           </div>
         </header>
 
@@ -53,7 +153,7 @@ export default function DashboardContent({ userEmail, userName }: DashboardConte
                       <dl>
                         <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total Spend</dt>
                         <dd className="text-lg font-semibold text-gray-900 dark:text-white">
-                          {selectedAccount === "all" ? "$26,001.46" : "$8,366.88"}
+                          {loading ? '...' : `$${summary?.totalSpend || '0.00'}`}
                         </dd>
                       </dl>
                     </div>
@@ -73,7 +173,7 @@ export default function DashboardContent({ userEmail, userName }: DashboardConte
                       <dl>
                         <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total Leads</dt>
                         <dd className="text-lg font-semibold text-gray-900 dark:text-white">
-                          {selectedAccount === "all" ? "1,270" : "82"}
+                          {loading ? '...' : (summary?.totalLeads || 0).toLocaleString()}
                         </dd>
                       </dl>
                     </div>
@@ -93,7 +193,7 @@ export default function DashboardContent({ userEmail, userName }: DashboardConte
                       <dl>
                         <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Avg CTR</dt>
                         <dd className="text-lg font-semibold text-gray-900 dark:text-white">
-                          {selectedAccount === "all" ? "3.03%" : "3.12%"}
+                          {loading ? '...' : `${summary?.avgCTR || '0.00'}%`}
                         </dd>
                       </dl>
                     </div>
@@ -113,7 +213,7 @@ export default function DashboardContent({ userEmail, userName }: DashboardConte
                       <dl>
                         <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Campaigns</dt>
                         <dd className="text-lg font-semibold text-gray-900 dark:text-white">
-                          {selectedAccount === "all" ? "175" : "68"}
+                          {loading ? '...' : (summary?.totalCampaigns || 0)}
                         </dd>
                       </dl>
                     </div>
@@ -122,18 +222,85 @@ export default function DashboardContent({ userEmail, userName }: DashboardConte
               </div>
             </div>
 
-            {/* Coming Soon Section */}
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Coming Soon</h2>
-              <p className="text-gray-600 dark:text-gray-400">
-                Full Meta Ads dashboard with campaigns, ad sets, and ads tables will be integrated here.
-                The intelligence layer from the original dashboard will be migrated to this production environment.
-              </p>
-              {selectedAccount !== "all" && (
-                <p className="mt-4 text-sm text-violet-600 dark:text-violet-400">
-                  Currently viewing: Account {selectedAccount}
+            {/* Campaigns Table */}
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-700">
+              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Campaigns</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  {campaigns.length} campaign{campaigns.length !== 1 ? 's' : ''} found
                 </p>
-              )}
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-900">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Campaign Name</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Budget</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Spend</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Leads</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cost/Lead</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">CTR</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {loading ? (
+                      <tr>
+                        <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                          Loading campaigns...
+                        </td>
+                      </tr>
+                    ) : campaigns.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                          No campaigns found. Click "Sync Data" to fetch from Meta.
+                        </td>
+                      </tr>
+                    ) : (
+                      campaigns.map((campaign) => {
+                        const budget = campaign.dailyBudget 
+                          ? `$${(parseFloat(campaign.dailyBudget) / 100).toFixed(2)}/day`
+                          : campaign.lifetimeBudget
+                          ? `$${(parseFloat(campaign.lifetimeBudget) / 100).toFixed(2)} lifetime`
+                          : 'N/A';
+                        
+                        return (
+                          <tr key={campaign.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                              {campaign.name}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                campaign.effectiveStatus === 'ACTIVE' 
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                  : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                              }`}>
+                                {campaign.effectiveStatus || campaign.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                              {budget}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-white">
+                              ${campaign.metrics?.spend?.toFixed(2) || '0.00'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-white">
+                              {campaign.metrics?.leads || 0}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-white">
+                              ${campaign.metrics?.costPerLead?.toFixed(2) || '0.00'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-white">
+                              {campaign.metrics?.ctr?.toFixed(2) || '0.00'}%
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </main>
