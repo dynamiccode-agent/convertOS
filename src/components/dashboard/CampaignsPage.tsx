@@ -108,7 +108,7 @@ export default function CampaignsPage({ selectedAccount, accounts, onAccountChan
     if (hidePaused) {
       filtered = filtered.filter(item => {
         const status = (item.effectiveStatus || item.status || '').toUpperCase();
-        return status !== 'PAUSED';
+        return !status.includes('PAUSED');
       });
     }
     
@@ -122,7 +122,11 @@ export default function CampaignsPage({ selectedAccount, accounts, onAccountChan
 
   // Apply cascading filters for Ad Sets tab
   if (activeTab === 'adsets' && selectedCampaignFilter !== 'all') {
+    console.log('[Filter Debug] Selected campaign filter:', selectedCampaignFilter);
+    console.log('[Filter Debug] Total ad sets before campaign filter:', filteredAdSets.length);
+    console.log('[Filter Debug] Ad set campaign IDs:', filteredAdSets.map(as => ({ name: as.name, campaignId: as.campaignId })));
     filteredAdSets = filteredAdSets.filter(as => as.campaignId === selectedCampaignFilter);
+    console.log('[Filter Debug] Ad sets after campaign filter:', filteredAdSets.length);
   }
 
   // Apply cascading filters for Ads tab
@@ -235,7 +239,7 @@ export default function CampaignsPage({ selectedAccount, accounts, onAccountChan
               emptyMessage={
                 campaigns.length === 0
                   ? 'No campaigns found. Click "Sync Data" to fetch from Meta.'
-                  : 'No campaigns match your filters. Try adjusting the status or date range.'
+                  : `No campaigns match your filters. ${filteredCampaigns.length === 0 ? `Showing ${statusFilter === 'active' ? 'active' : statusFilter === 'inactive' ? 'inactive' : 'all'} campaigns.` : ''}`
               }
             />
           </div>
@@ -249,7 +253,9 @@ export default function CampaignsPage({ selectedAccount, accounts, onAccountChan
               emptyMessage={
                 adSets.length === 0
                   ? 'No ad sets found. Click "Sync Data" to fetch from Meta.'
-                  : 'No ad sets match your filters. Try adjusting the status or date range.'
+                  : selectedCampaignFilter !== 'all'
+                  ? `No ad sets found for the selected campaign. Found ${adSets.filter(as => as.campaignId === selectedCampaignFilter).length} total ad sets for this campaign (before status filter).`
+                  : `No ad sets match your filters. Showing ${statusFilter === 'active' ? 'active' : statusFilter === 'inactive' ? 'inactive' : 'all'} ad sets.`
               }
             />
           </div>
@@ -263,7 +269,7 @@ export default function CampaignsPage({ selectedAccount, accounts, onAccountChan
               emptyMessage={
                 ads.length === 0
                   ? 'No ads found. Click "Sync Data" to fetch from Meta.'
-                  : 'No ads match your filters. Try adjusting the status or date range.'
+                  : `No ads match your filters. ${selectedCampaignFilter !== 'all' ? 'Campaign filter active. ' : ''}${selectedAdSetFilter !== 'all' ? 'Ad Set filter active. ' : ''}Try adjusting filters.`
               }
             />
           </div>

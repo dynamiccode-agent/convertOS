@@ -9,7 +9,7 @@ interface CampaignFiltersProps {
   onDateRangeChange: (range: string) => void;
   onColumnSettingsClick: () => void;
   activeTab?: 'all' | 'campaigns' | 'adsets' | 'ads';
-  campaigns?: Array<{ id: string; campaignId: string; name: string }>;
+  campaigns?: Array<{ id: string; campaignId: string; name: string; status?: string; effectiveStatus?: string }>;
   adSets?: Array<{ id: string; adsetId: string; campaignId: string; name: string }>;
   selectedCampaign?: string;
   selectedAdSet?: string;
@@ -35,6 +35,36 @@ export default function CampaignFilters({
   hidePaused = false,
   onHidePausedChange,
 }: CampaignFiltersProps) {
+  // Filter campaigns based on status filter
+  const filteredCampaigns = campaigns.filter(campaign => {
+    // Apply status filter
+    if (statusFilter === 'active') {
+      if (campaign.effectiveStatus !== 'ACTIVE' && campaign.status !== 'ACTIVE') {
+        return false;
+      }
+    } else if (statusFilter === 'inactive') {
+      if (campaign.effectiveStatus === 'ACTIVE' || campaign.status === 'ACTIVE') {
+        return false;
+      }
+    }
+    
+    // Apply hide paused filter
+    if (hidePaused) {
+      const status = (campaign.effectiveStatus || campaign.status || '').toUpperCase();
+      if (status.includes('PAUSED')) {
+        return false;
+      }
+    }
+    
+    return true;
+  });
+
+  console.log('[Campaign Filter Debug] Status filter:', statusFilter);
+  console.log('[Campaign Filter Debug] Hide paused:', hidePaused);
+  console.log('[Campaign Filter Debug] Total campaigns:', campaigns.length);
+  console.log('[Campaign Filter Debug] Filtered campaigns:', filteredCampaigns.length);
+  console.log('[Campaign Filter Debug] Campaign details:', filteredCampaigns.map(c => ({ name: c.name, id: c.campaignId, status: c.effectiveStatus || c.status })));
+
   // Filter ad sets based on selected campaign
   const filteredAdSets = selectedCampaign === 'all' 
     ? adSets 
@@ -100,7 +130,7 @@ export default function CampaignFilters({
                 className="flex-1 sm:flex-none px-2 sm:px-3 py-1.5 text-xs sm:text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:border-transparent"
               >
                 <option value="all">All Campaigns</option>
-                {campaigns.map((campaign) => (
+                {filteredCampaigns.map((campaign) => (
                   <option key={campaign.campaignId} value={campaign.campaignId}>
                     {campaign.name}
                   </option>
