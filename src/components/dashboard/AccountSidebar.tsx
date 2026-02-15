@@ -24,6 +24,8 @@ export default function AccountSidebar({
 }: AccountSidebarProps) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
+  const [accountsExpanded, setAccountsExpanded] = useState(true);
+  const [contactsExpanded, setContactsExpanded] = useState(false);
 
   useEffect(() => {
     fetchAccounts();
@@ -45,7 +47,7 @@ export default function AccountSidebar({
   };
 
   return (
-    <aside className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+    <aside className="w-64 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-lg border-r border-gray-200 dark:border-gray-700 flex flex-col">
       {/* Logo */}
       <div className="p-6 border-b border-gray-200 dark:border-gray-700">
         <div className="text-2xl font-bold bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent">
@@ -73,35 +75,74 @@ export default function AccountSidebar({
           </button>
         </div>
         
-        {/* Ad Accounts */}
-        <div>
-          <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-            Ad Accounts {!loading && `(${accounts.length})`}
-          </h3>
+        {/* Ad Accounts Section */}
+        <div className="mb-4">
+          <button
+            onClick={() => setAccountsExpanded(!accountsExpanded)}
+            className="w-full flex items-center justify-between px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+          >
+            <span>Ad Accounts {!loading && `(${accounts.length})`}</span>
+            <svg
+              className={`h-4 w-4 transition-transform ${accountsExpanded ? 'transform rotate-180' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
           
-          {loading ? (
-            <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
-              Loading accounts...
+          {accountsExpanded && (
+            <div className="mt-2">
+              {loading ? (
+                <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+                  Loading accounts...
+                </div>
+              ) : accounts.length === 0 ? (
+                <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+                  No accounts found
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {accounts.map((account) => (
+                    <button
+                      key={account.id}
+                      onClick={() => onAccountSelect?.(account.id)}
+                      className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${
+                        selectedAccount === account.id
+                          ? "bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 font-medium"
+                          : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      }`}
+                    >
+                      {account.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          ) : accounts.length === 0 ? (
-            <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
-              No accounts found
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {accounts.map((account) => (
-                <button
-                  key={account.id}
-                  onClick={() => onAccountSelect?.(account.id)}
-                  className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${
-                    selectedAccount === account.id
-                      ? "bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 font-medium"
-                      : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  }`}
-                >
-                  {account.name}
-                </button>
-              ))}
+          )}
+        </div>
+
+        {/* Contacts Section */}
+        <div>
+          <button
+            onClick={() => setContactsExpanded(!contactsExpanded)}
+            className="w-full flex items-center justify-between px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+          >
+            <span>Contacts</span>
+            <svg
+              className={`h-4 w-4 transition-transform ${contactsExpanded ? 'transform rotate-180' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          
+          {contactsExpanded && (
+            <div className="mt-2 px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+              Coming soon...
             </div>
           )}
         </div>
