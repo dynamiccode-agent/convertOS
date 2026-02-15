@@ -30,7 +30,7 @@ interface MetaCampaign {
 interface MetaAdSet {
   id: string;
   name: string;
-  campaign_id?: string;
+  campaign_id: string; // This should always be present - it's the actual campaign ID from Meta
   status?: string;
   effective_status?: string;
   optimization_goal?: string;
@@ -257,7 +257,7 @@ export async function POST(request: Request) {
           // Fetch ad sets for this campaign
           try {
             const adSetsResponse = await fetch(
-              `https://graph.facebook.com/${META_API_VERSION}/${campaign.id}/adsets?fields=id,name,status,effective_status,optimization_goal,bid_strategy,daily_budget,lifetime_budget,created_time,start_time,end_time&access_token=${META_ACCESS_TOKEN}&limit=500`
+              `https://graph.facebook.com/${META_API_VERSION}/${campaign.id}/adsets?fields=id,name,campaign_id,status,effective_status,optimization_goal,bid_strategy,daily_budget,lifetime_budget,created_time,start_time,end_time&access_token=${META_ACCESS_TOKEN}&limit=500`
             );
 
             if (adSetsResponse.ok) {
@@ -270,12 +270,15 @@ export async function POST(request: Request) {
               }
 
               for (const adSet of adSets) {
-                console.log(`[Sync] Storing ad set ${adSet.id} (${adSet.name}) with campaignId: ${campaign.id}`);
+                // Use campaign_id from ad set if available, otherwise use parent campaign
+                const adSetCampaignId = adSet.campaign_id || campaign.id;
+                console.log(`[Sync] Storing ad set ${adSet.id} (${adSet.name}) with campaignId: ${adSetCampaignId} (parent campaign: ${campaign.id}, meta returned: ${adSet.campaign_id})`);
                 
                 await prisma.metaAdSet.upsert({
                   where: { adsetId: adSet.id },
                   update: {
                     name: adSet.name,
+                    campaignId: adSetCampaignId,
                     status: adSet.status,
                     effectiveStatus: adSet.effective_status,
                     optimizationGoal: adSet.optimization_goal,
@@ -289,7 +292,7 @@ export async function POST(request: Request) {
                   },
                   create: {
                     adsetId: adSet.id,
-                    campaignId: campaign.id,
+                    campaignId: adSetCampaignId,
                     accountId,
                     name: adSet.name,
                     status: adSet.status,
