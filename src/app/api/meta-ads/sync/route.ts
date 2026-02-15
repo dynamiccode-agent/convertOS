@@ -264,9 +264,14 @@ export async function POST(request: Request) {
               const adSetsData = await adSetsResponse.json();
               const adSets: MetaAdSet[] = adSetsData.data || [];
 
-              console.log(`[Sync] Campaign ${campaign.id}: Found ${adSets.length} ad sets`);
+              console.log(`[Sync] Campaign ${campaign.id} (${campaign.name}): Found ${adSets.length} ad sets`);
+              if (adSets.length > 0) {
+                console.log(`[Sync] Campaign ${campaign.id} ad sets:`, adSets.map(as => ({ id: as.id, name: as.name })));
+              }
 
               for (const adSet of adSets) {
+                console.log(`[Sync] Storing ad set ${adSet.id} (${adSet.name}) with campaignId: ${campaign.id}`);
+                
                 await prisma.metaAdSet.upsert({
                   where: { adsetId: adSet.id },
                   update: {
