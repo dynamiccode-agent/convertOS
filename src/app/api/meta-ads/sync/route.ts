@@ -253,6 +253,241 @@ export async function POST(request: Request) {
           } catch (error) {
             console.error(`[Sync] Failed to fetch insights for campaign ${campaign.id}:`, error);
           }
+
+          // Fetch ad sets for this campaign
+          try {
+            const adSetsResponse = await fetch(
+              `https://graph.facebook.com/${META_API_VERSION}/${campaign.id}/adsets?fields=id,name,status,effective_status,optimization_goal,bid_strategy,daily_budget,lifetime_budget,created_time,start_time,end_time&access_token=${META_ACCESS_TOKEN}&limit=500`
+            );
+
+            if (adSetsResponse.ok) {
+              const adSetsData = await adSetsResponse.json();
+              const adSets: MetaAdSet[] = adSetsData.data || [];
+
+              console.log(`[Sync] Campaign ${campaign.id}: Found ${adSets.length} ad sets`);
+
+              for (const adSet of adSets) {
+                await prisma.metaAdSet.upsert({
+                  where: { adsetId: adSet.id },
+                  update: {
+                    name: adSet.name,
+                    status: adSet.status,
+                    effectiveStatus: adSet.effective_status,
+                    optimizationGoal: adSet.optimization_goal,
+                    bidStrategy: adSet.bid_strategy,
+                    dailyBudget: adSet.daily_budget,
+                    lifetimeBudget: adSet.lifetime_budget,
+                    createdTime: adSet.created_time ? new Date(adSet.created_time) : null,
+                    startTime: adSet.start_time ? new Date(adSet.start_time) : null,
+                    endTime: adSet.end_time ? new Date(adSet.end_time) : null,
+                    lastSyncedAt: new Date(),
+                  },
+                  create: {
+                    adsetId: adSet.id,
+                    campaignId: campaign.id,
+                    accountId,
+                    name: adSet.name,
+                    status: adSet.status,
+                    effectiveStatus: adSet.effective_status,
+                    optimizationGoal: adSet.optimization_goal,
+                    bidStrategy: adSet.bid_strategy,
+                    dailyBudget: adSet.daily_budget,
+                    lifetimeBudget: adSet.lifetime_budget,
+                    createdTime: adSet.created_time ? new Date(adSet.created_time) : null,
+                    startTime: adSet.start_time ? new Date(adSet.start_time) : null,
+                    endTime: adSet.end_time ? new Date(adSet.end_time) : null,
+                    lastSyncedAt: new Date(),
+                  },
+                });
+
+                // Fetch insights for ad set
+                try {
+                  const adSetInsightsResponse = await fetch(
+                    `https://graph.facebook.com/${META_API_VERSION}/${adSet.id}/insights?fields=spend,impressions,clicks,reach,frequency,ctr,cpc,cpm,actions&date_preset=${datePreset}&access_token=${META_ACCESS_TOKEN}`
+                  );
+
+                  if (adSetInsightsResponse.ok) {
+                    const adSetInsightsData = await adSetInsightsResponse.json();
+                    const adSetInsights: MetaInsightsData[] = adSetInsightsData.data || [];
+
+                    if (adSetInsights.length > 0) {
+                      const insight = adSetInsights[0];
+                      const actions = insight.actions || [];
+                      const leads = actions.find(a => a.action_type === 'lead')?.value || '0';
+                      const purchases = actions.find(a => a.action_type === 'purchase' || a.action_type === 'offsite_conversion.fb_pixel_purchase')?.value || '0';
+
+                      const spend = parseFloat(insight.spend || '0');
+                      const leadsCount = parseInt(leads);
+                      const purchasesCount = parseInt(purchases);
+
+                      await prisma.metaInsight.upsert({
+                        where: {
+                          entityId_entityType_dateStart_dateStop: {
+                            entityId: adSet.id,
+                            entityType: 'adset',
+                            dateStart: new Date(adSetInsightsData.data[0]?.date_start || new Date()),
+                            dateStop: new Date(adSetInsightsData.data[0]?.date_stop || new Date()),
+                          },
+                        },
+                        update: {
+                          spend,
+                          impressions: parseInt(insight.impressions || '0'),
+                          clicks: parseInt(insight.clicks || '0'),
+                          reach: parseInt(insight.reach || '0'),
+                          frequency: parseFloat(insight.frequency || '0'),
+                          ctr: parseFloat(insight.ctr || '0'),
+                          cpc: parseFloat(insight.cpc || '0'),
+                          cpm: parseFloat(insight.cpm || '0'),
+                          leads: leadsCount,
+                          purchases: purchasesCount,
+                          costPerLead: leadsCount > 0 ? spend / leadsCount : null,
+                          costPerPurchase: purchasesCount > 0 ? spend / purchasesCount : null,
+                        },
+                        create: {
+                          entityId: adSet.id,
+                          entityType: 'adset',
+                          dateStart: new Date(adSetInsightsData.data[0]?.date_start || new Date()),
+                          dateStop: new Date(adSetInsightsData.data[0]?.date_stop || new Date()),
+                          spend,
+                          impressions: parseInt(insight.impressions || '0'),
+                          clicks: parseInt(insight.clicks || '0'),
+                          reach: parseInt(insight.reach || '0'),
+                          frequency: parseFloat(insight.frequency || '0'),
+                          ctr: parseFloat(insight.ctr || '0'),
+                          cpc: parseFloat(insight.cpc || '0'),
+                          cpm: parseFloat(insight.cpm || '0'),
+                          leads: leadsCount,
+                          purchases: purchasesCount,
+                          costPerLead: leadsCount > 0 ? spend / leadsCount : null,
+                          costPerPurchase: purchasesCount > 0 ? spend / purchasesCount : null,
+                        },
+                      });
+                    }
+                  }
+                } catch (error) {
+                  console.error(`[Sync] Failed to fetch insights for ad set ${adSet.id}:`, error);
+                }
+
+                // Fetch ads for this ad set
+                try {
+                  const adsResponse = await fetch(
+                    `https://graph.facebook.com/${META_API_VERSION}/${adSet.id}/ads?fields=id,name,status,effective_status,creative{id,title,body,image_url,thumbnail_url},created_time&access_token=${META_ACCESS_TOKEN}&limit=500`
+                  );
+
+                  if (adsResponse.ok) {
+                    const adsData = await adsResponse.json();
+                    const ads: MetaAd[] = adsData.data || [];
+
+                    console.log(`[Sync] Ad Set ${adSet.id}: Found ${ads.length} ads`);
+
+                    for (const ad of ads) {
+                      await prisma.metaAd.upsert({
+                        where: { adId: ad.id },
+                        update: {
+                          name: ad.name,
+                          status: ad.status,
+                          effectiveStatus: ad.effective_status,
+                          creativeId: ad.creative?.id,
+                          creativeTitle: ad.creative?.title,
+                          creativeBody: ad.creative?.body,
+                          creativeImageUrl: ad.creative?.image_url || ad.creative?.thumbnail_url,
+                          createdTime: ad.created_time ? new Date(ad.created_time) : null,
+                          lastSyncedAt: new Date(),
+                        },
+                        create: {
+                          adId: ad.id,
+                          adsetId: adSet.id,
+                          campaignId: campaign.id,
+                          accountId,
+                          name: ad.name,
+                          status: ad.status,
+                          effectiveStatus: ad.effective_status,
+                          creativeId: ad.creative?.id,
+                          creativeTitle: ad.creative?.title,
+                          creativeBody: ad.creative?.body,
+                          creativeImageUrl: ad.creative?.image_url || ad.creative?.thumbnail_url,
+                          createdTime: ad.created_time ? new Date(ad.created_time) : null,
+                          lastSyncedAt: new Date(),
+                        },
+                      });
+
+                      // Fetch insights for ad
+                      try {
+                        const adInsightsResponse = await fetch(
+                          `https://graph.facebook.com/${META_API_VERSION}/${ad.id}/insights?fields=spend,impressions,clicks,reach,frequency,ctr,cpc,cpm,actions&date_preset=${datePreset}&access_token=${META_ACCESS_TOKEN}`
+                        );
+
+                        if (adInsightsResponse.ok) {
+                          const adInsightsData = await adInsightsResponse.json();
+                          const adInsights: MetaInsightsData[] = adInsightsData.data || [];
+
+                          if (adInsights.length > 0) {
+                            const insight = adInsights[0];
+                            const actions = insight.actions || [];
+                            const leads = actions.find(a => a.action_type === 'lead')?.value || '0';
+                            const purchases = actions.find(a => a.action_type === 'purchase' || a.action_type === 'offsite_conversion.fb_pixel_purchase')?.value || '0';
+
+                            const spend = parseFloat(insight.spend || '0');
+                            const leadsCount = parseInt(leads);
+                            const purchasesCount = parseInt(purchases);
+
+                            await prisma.metaInsight.upsert({
+                              where: {
+                                entityId_entityType_dateStart_dateStop: {
+                                  entityId: ad.id,
+                                  entityType: 'ad',
+                                  dateStart: new Date(adInsightsData.data[0]?.date_start || new Date()),
+                                  dateStop: new Date(adInsightsData.data[0]?.date_stop || new Date()),
+                                },
+                              },
+                              update: {
+                                spend,
+                                impressions: parseInt(insight.impressions || '0'),
+                                clicks: parseInt(insight.clicks || '0'),
+                                reach: parseInt(insight.reach || '0'),
+                                frequency: parseFloat(insight.frequency || '0'),
+                                ctr: parseFloat(insight.ctr || '0'),
+                                cpc: parseFloat(insight.cpc || '0'),
+                                cpm: parseFloat(insight.cpm || '0'),
+                                leads: leadsCount,
+                                purchases: purchasesCount,
+                                costPerLead: leadsCount > 0 ? spend / leadsCount : null,
+                                costPerPurchase: purchasesCount > 0 ? spend / purchasesCount : null,
+                              },
+                              create: {
+                                entityId: ad.id,
+                                entityType: 'ad',
+                                dateStart: new Date(adInsightsData.data[0]?.date_start || new Date()),
+                                dateStop: new Date(adInsightsData.data[0]?.date_stop || new Date()),
+                                spend,
+                                impressions: parseInt(insight.impressions || '0'),
+                                clicks: parseInt(insight.clicks || '0'),
+                                reach: parseInt(insight.reach || '0'),
+                                frequency: parseFloat(insight.frequency || '0'),
+                                ctr: parseFloat(insight.ctr || '0'),
+                                cpc: parseFloat(insight.cpc || '0'),
+                                cpm: parseFloat(insight.cpm || '0'),
+                                leads: leadsCount,
+                                purchases: purchasesCount,
+                                costPerLead: leadsCount > 0 ? spend / leadsCount : null,
+                                costPerPurchase: purchasesCount > 0 ? spend / purchasesCount : null,
+                              },
+                            });
+                          }
+                        }
+                      } catch (error) {
+                        console.error(`[Sync] Failed to fetch insights for ad ${ad.id}:`, error);
+                      }
+                    }
+                  }
+                } catch (error) {
+                  console.error(`[Sync] Failed to fetch ads for ad set ${adSet.id}:`, error);
+                }
+              }
+            }
+          } catch (error) {
+            console.error(`[Sync] Failed to fetch ad sets for campaign ${campaign.id}:`, error);
+          }
         }
       }
     }
