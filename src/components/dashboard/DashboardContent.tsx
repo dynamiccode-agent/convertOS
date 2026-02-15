@@ -51,8 +51,12 @@ export default function DashboardContent({ userEmail, userName }: DashboardConte
       if (data.success) {
         setLastSynced(new Date().toLocaleString());
         await fetchAccounts();
-        alert(`✅ Data synced successfully!\n\nSynced ${data.accountsSynced} account(s)`);
-        // Trigger refresh by updating state
+        
+        // Show success message
+        const accountsText = data.accountsSynced === 1 ? 'account' : 'accounts';
+        alert(`✅ Data synced successfully!\n\nSynced ${data.accountsSynced} ${accountsText}\n\nRefreshing dashboard...`);
+        
+        // Refresh the page to load new data
         window.location.reload();
       } else {
         const errorMsg = data.details || data.error || 'Unknown error';

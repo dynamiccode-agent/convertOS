@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-
-const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
-const META_API_VERSION = process.env.META_API_VERSION || 'v24.0';
+import prisma from '@/lib/prisma';
 
 export async function GET() {
   try {
@@ -13,30 +11,34 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!META_ACCESS_TOKEN) {
-      return NextResponse.json({ error: 'Meta API not configured' }, { status: 500 });
-    }
+    // Fetch ad accounts from database
+    const accounts = await prisma.metaAccount.findMany({
+      select: {
+        id: true,
+        accountId: true,
+        name: true,
+        accountStatus: true,
+        currency: true,
+      },
+      orderBy: { name: 'asc' },
+    });
 
-    // Fetch ad accounts from Meta API
-    const response = await fetch(
-      `https://graph.facebook.com/${META_API_VERSION}/me/adaccounts?fields=id,name,account_status,currency,timezone_name&access_token=${META_ACCESS_TOKEN}`,
-      { next: { revalidate: 300 } } // Cache for 5 minutes
-    );
-
-    if (!response.ok) {
-      throw new Error(`Meta API error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
+    // Format for frontend
+    const formattedAccounts = accounts.map(account => ({
+      id: account.accountId,
+      name: account.name,
+      account_status: account.accountStatus,
+      currency: account.currency,
+    }));
 
     return NextResponse.json({
-      accounts: data.data || [],
+      accounts: formattedAccounts,
       success: true
     });
-  } catch (error) {
-    console.error('Error fetching Meta ad accounts:', error);
+  } catch (error: any) {
+    console.error('Error fetching ad accounts:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch ad accounts', success: false },
+      { error: 'Failed to fetch ad accounts', details: error.message, success: false },
       { status: 500 }
     );
   }

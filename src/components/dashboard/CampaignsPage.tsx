@@ -16,7 +16,7 @@ interface CampaignsPageProps {
 }
 
 // Define default columns for each view
-const CAMPAIGN_COLUMNS: ColumnConfig[] = [
+const DEFAULT_COLUMNS: ColumnConfig[] = [
   { id: 'name', label: 'Name', visible: true, order: 0, sortable: true, type: 'text' },
   { id: 'effectiveStatus', label: 'Status', visible: true, order: 1, sortable: true, type: 'text' },
   { id: 'metrics.spend', label: 'Spend', visible: true, order: 2, sortable: true, type: 'currency' },
@@ -46,7 +46,7 @@ export default function CampaignsPage({ selectedAccount, accounts, onAccountChan
   
   // UI State
   const [columnManagerOpen, setColumnManagerOpen] = useState(false);
-  const [columns, setColumns] = useState<ColumnConfig[]>(CAMPAIGN_COLUMNS);
+  const [columns, setColumns] = useState<ColumnConfig[]>(DEFAULT_COLUMNS);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [selectedType, setSelectedType] = useState<'campaign' | 'adset' | 'ad'>('campaign');
@@ -168,29 +168,47 @@ export default function CampaignsPage({ selectedAccount, accounts, onAccountChan
             />
           </div>
         ) : activeTab === 'campaigns' ? (
-          <SortableTable
-            columns={columns}
-            data={filteredCampaigns}
-            onRowClick={handleRowClick}
-            loading={loading}
-            emptyMessage="No campaigns found. Try adjusting your filters or sync data."
-          />
+          <div className="h-full">
+            <SortableTable
+              columns={columns}
+              data={filteredCampaigns}
+              onRowClick={handleRowClick}
+              loading={loading}
+              emptyMessage={
+                campaigns.length === 0
+                  ? 'No campaigns found. Click "Sync Data" to fetch from Meta.'
+                  : 'No campaigns match your filters. Try adjusting the status or date range.'
+              }
+            />
+          </div>
         ) : activeTab === 'adsets' ? (
-          <SortableTable
-            columns={columns}
-            data={filteredAdSets}
-            onRowClick={handleRowClick}
-            loading={loading}
-            emptyMessage="No ad sets found. Try adjusting your filters or sync data."
-          />
+          <div className="h-full">
+            <SortableTable
+              columns={columns}
+              data={filteredAdSets}
+              onRowClick={handleRowClick}
+              loading={loading}
+              emptyMessage={
+                adSets.length === 0
+                  ? 'No ad sets found. Click "Sync Data" to fetch from Meta.'
+                  : 'No ad sets match your filters. Try adjusting the status or date range.'
+              }
+            />
+          </div>
         ) : (
-          <SortableTable
-            columns={columns}
-            data={filteredAds}
-            onRowClick={handleRowClick}
-            loading={loading}
-            emptyMessage="No ads found. Try adjusting your filters or sync data."
-          />
+          <div className="h-full">
+            <SortableTable
+              columns={columns}
+              data={filteredAds}
+              onRowClick={handleRowClick}
+              loading={loading}
+              emptyMessage={
+                ads.length === 0
+                  ? 'No ads found. Click "Sync Data" to fetch from Meta.'
+                  : 'No ads match your filters. Try adjusting the status or date range.'
+              }
+            />
+          </div>
         )}
       </div>
 

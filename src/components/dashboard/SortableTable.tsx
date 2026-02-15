@@ -75,8 +75,22 @@ export default function SortableTable({
     return sortConfig.direction === 'asc' ? comparison : -comparison;
   });
 
-  const formatValue = (value: any, column: ColumnConfig) => {
+  const formatValue = (value: any, column: ColumnConfig, row?: any) => {
     if (value === null || value === undefined) return '-';
+
+    // Special handling for status column
+    if (column.id === 'effectiveStatus' || column.id === 'status') {
+      const status = value || row?.status || 'UNKNOWN';
+      return (
+        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+          status === 'ACTIVE' 
+            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+            : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+        }`}>
+          {status}
+        </span>
+      );
+    }
 
     switch (column.type) {
       case 'currency':
@@ -166,7 +180,7 @@ export default function SortableTable({
                     key={column.id}
                     className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white"
                   >
-                    {formatValue(getNestedValue(row, column.id), column)}
+                    {formatValue(getNestedValue(row, column.id), column, row)}
                   </td>
                 ))}
               </tr>

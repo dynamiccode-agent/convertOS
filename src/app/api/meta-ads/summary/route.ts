@@ -25,13 +25,13 @@ export async function GET(request: Request) {
 
     const campaignIds = campaigns.map(c => c.campaignId);
 
-    // Fetch latest insights
-    const insights = await prisma.metaInsight.findMany({
+    // Fetch latest insights for each campaign
+    const insights = await prisma.metaCampaignInsights.findMany({
       where: {
-        entityId: { in: campaignIds },
-        entityType: 'campaign',
+        campaignId: { in: campaignIds },
       },
-      orderBy: { dateStart: 'desc' },
+      orderBy: { date: 'desc' },
+      distinct: ['campaignId'],
     });
 
     // Calculate summary metrics
@@ -41,17 +41,12 @@ export async function GET(request: Request) {
     let totalLeads = 0;
     let totalPurchases = 0;
 
-    const seenCampaigns = new Set();
     insights.forEach(insight => {
-      // Only count the latest insight per campaign
-      if (!seenCampaigns.has(insight.entityId)) {
-        seenCampaigns.add(insight.entityId);
-        totalSpend += Number(insight.spend || 0);
-        totalImpressions += insight.impressions || 0;
-        totalClicks += insight.clicks || 0;
-        totalLeads += insight.leads || 0;
-        totalPurchases += insight.purchases || 0;
-      }
+      totalSpend += Number(insight.spend || 0);
+      totalImpressions += insight.impressions || 0;
+      totalClicks += insight.clicks || 0;
+      totalLeads += insight.leads || 0;
+      totalPurchases += insight.purchases || 0;
     });
 
     const avgCTR = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
