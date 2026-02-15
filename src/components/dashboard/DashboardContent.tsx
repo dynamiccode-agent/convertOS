@@ -55,19 +55,27 @@ export default function DashboardContent({ userEmail, userName }: DashboardConte
     try {
       // Fetch summary
       const summaryRes = await fetch(`/api/meta-ads/summary?accountId=${selectedAccount}`);
-      const summaryData = await summaryRes.json();
-      if (summaryData.success) {
-        setSummary(summaryData.summary);
+      if (summaryRes.ok) {
+        const summaryData = await summaryRes.json();
+        if (summaryData.success && summaryData.summary) {
+          setSummary(summaryData.summary);
+        }
       }
 
       // Fetch campaigns
       const campaignsRes = await fetch(`/api/meta-ads/campaigns?accountId=${selectedAccount}`);
-      const campaignsData = await campaignsRes.json();
-      if (campaignsData.success) {
-        setCampaigns(campaignsData.campaigns);
+      if (campaignsRes.ok) {
+        const campaignsData = await campaignsRes.json();
+        if (campaignsData.success && Array.isArray(campaignsData.campaigns)) {
+          setCampaigns(campaignsData.campaigns);
+        } else {
+          setCampaigns([]);
+        }
       }
     } catch (error) {
       console.error('Error fetching data:', error);
+      setCampaigns([]);
+      setSummary(null);
     } finally {
       setLoading(false);
     }
@@ -261,16 +269,26 @@ export default function DashboardContent({ userEmail, userName }: DashboardConte
                       </tr>
                     ) : (
                       campaigns.map((campaign) => {
-                        const budget = campaign.dailyBudget 
-                          ? `$${(parseFloat(campaign.dailyBudget) / 100).toFixed(2)}/day`
-                          : campaign.lifetimeBudget
-                          ? `$${(parseFloat(campaign.lifetimeBudget) / 100).toFixed(2)} lifetime`
-                          : 'N/A';
+                        let budget = 'N/A';
+                        try {
+                          if (campaign.dailyBudget && !isNaN(parseFloat(campaign.dailyBudget))) {
+                            budget = `$${(parseFloat(campaign.dailyBudget) / 100).toFixed(2)}/day`;
+                          } else if (campaign.lifetimeBudget && !isNaN(parseFloat(campaign.lifetimeBudget))) {
+                            budget = `$${(parseFloat(campaign.lifetimeBudget) / 100).toFixed(2)} lifetime`;
+                          }
+                        } catch (e) {
+                          budget = 'N/A';
+                        }
+
+                        const spend = campaign.metrics?.spend ? Number(campaign.metrics.spend).toFixed(2) : '0.00';
+                        const leads = campaign.metrics?.leads ? Number(campaign.metrics.leads) : 0;
+                        const costPerLead = campaign.metrics?.costPerLead ? Number(campaign.metrics.costPerLead).toFixed(2) : '0.00';
+                        const ctr = campaign.metrics?.ctr ? Number(campaign.metrics.ctr).toFixed(2) : '0.00';
                         
                         return (
                           <tr key={campaign.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                              {campaign.name}
+                              {campaign.name || 'Unnamed Campaign'}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -278,23 +296,23 @@ export default function DashboardContent({ userEmail, userName }: DashboardConte
                                   ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                                   : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
                               }`}>
-                                {campaign.effectiveStatus || campaign.status}
+                                {campaign.effectiveStatus || campaign.status || 'UNKNOWN'}
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                               {budget}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-white">
-                              ${campaign.metrics?.spend?.toFixed(2) || '0.00'}
+                              ${spend}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-white">
-                              {campaign.metrics?.leads || 0}
+                              {leads}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-white">
-                              ${campaign.metrics?.costPerLead?.toFixed(2) || '0.00'}
+                              ${costPerLead}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-white">
-                              {campaign.metrics?.ctr?.toFixed(2) || '0.00'}%
+                              {ctr}%
                             </td>
                           </tr>
                         );

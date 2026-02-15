@@ -41,11 +41,39 @@ export async function GET(request: Request) {
       }
     });
 
-    // Combine campaigns with their insights
-    const campaignsWithMetrics = campaigns.map(campaign => ({
-      ...campaign,
-      metrics: latestInsights.get(campaign.campaignId) || null,
-    }));
+    // Combine campaigns with their insights (convert Decimals to numbers)
+    const campaignsWithMetrics = campaigns.map(campaign => {
+      const insight = latestInsights.get(campaign.campaignId);
+      return {
+        id: campaign.id,
+        campaignId: campaign.campaignId,
+        accountId: campaign.accountId,
+        name: campaign.name,
+        objective: campaign.objective,
+        status: campaign.status,
+        effectiveStatus: campaign.effectiveStatus,
+        dailyBudget: campaign.dailyBudget,
+        lifetimeBudget: campaign.lifetimeBudget,
+        budgetRemaining: campaign.budgetRemaining,
+        createdTime: campaign.createdTime,
+        startTime: campaign.startTime,
+        stopTime: campaign.stopTime,
+        metrics: insight ? {
+          spend: insight.spend ? Number(insight.spend) : 0,
+          impressions: insight.impressions || 0,
+          clicks: insight.clicks || 0,
+          reach: insight.reach || 0,
+          frequency: insight.frequency ? Number(insight.frequency) : 0,
+          ctr: insight.ctr ? Number(insight.ctr) : 0,
+          cpc: insight.cpc ? Number(insight.cpc) : 0,
+          cpm: insight.cpm ? Number(insight.cpm) : 0,
+          leads: insight.leads || 0,
+          purchases: insight.purchases || 0,
+          costPerLead: insight.costPerLead ? Number(insight.costPerLead) : 0,
+          costPerPurchase: insight.costPerPurchase ? Number(insight.costPerPurchase) : 0,
+        } : null,
+      };
+    });
 
     return NextResponse.json({
       success: true,
