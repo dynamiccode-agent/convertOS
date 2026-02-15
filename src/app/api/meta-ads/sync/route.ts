@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 
 const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
@@ -76,7 +75,7 @@ export async function POST(request: Request) {
   try {
     console.log('[Sync] POST request received');
     
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     console.log('[Sync] Session check:', session ? 'Authenticated' : 'Not authenticated');
     
     if (!session) {

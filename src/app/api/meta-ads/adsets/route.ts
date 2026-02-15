@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -59,12 +58,10 @@ export async function GET(request: NextRequest) {
         name: adSet.name,
         status: adSet.status,
         effectiveStatus: adSet.effectiveStatus,
+        optimizationGoal: adSet.optimizationGoal,
+        bidStrategy: adSet.bidStrategy,
         dailyBudget: adSet.dailyBudget,
         lifetimeBudget: adSet.lifetimeBudget,
-        budgetRemaining: adSet.budgetRemaining,
-        billingEvent: adSet.billingEvent,
-        bidStrategy: adSet.bidStrategy,
-        targetingSpec: adSet.targetingSpec,
         createdTime: adSet.createdTime,
         startTime: adSet.startTime,
         endTime: adSet.endTime,
