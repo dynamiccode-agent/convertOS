@@ -39,9 +39,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Read raw body
+    // 3. Read raw body (preserve exact bytes for HMAC)
     const rawBody = await request.text();
-    const payload = JSON.parse(rawBody);
+    
+    // Parse JSON separately (after signature validation)
+    let payload: any;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch (parseError) {
+      return NextResponse.json(
+        { error: 'Invalid JSON payload' },
+        { status: 400 }
+      );
+    }
 
     eventId = payload.event_id;
 
@@ -76,16 +86,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Check idempotency - has this event_id been processed?
+    // 5. Check idempotency - has this (connectionId + event_id) been processed?
     const existing = await prisma.webhookEvent.findUnique({
-      where: { eventId },
+      where: {
+        connectionId_eventId: {
+          connectionId: connection.id,
+          eventId,
+        },
+      },
     });
 
     if (existing) {
       // Already processed, return 200 to prevent retries
       return NextResponse.json({
         success: true,
-        message: 'Event already processed',
+        message: 'Event already processed (idempotent)',
         eventId,
       });
     }
@@ -248,6 +263,11 @@ async function processWebhookEvent(
   const eventType = payload.event_type;
 
   switch (eventType) {
+    case 'test.ping':
+      // Test event - just validate receipt, no processing needed
+      console.log('[Webhook Test] Ping received successfully');
+      break;
+
     case 'lead.created':
       await processLead(clientId, connectionId, payload.data);
       break;

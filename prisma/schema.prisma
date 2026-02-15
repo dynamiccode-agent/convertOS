@@ -260,7 +260,7 @@ model WebhookEvent {
   id               String                @id @default(cuid())
   clientId         String
   connectionId     String
-  eventId          String                @unique // For idempotency
+  eventId          String                // For idempotency (scoped to connection)
   eventType        String                // lead.created, order.paid, checkout.abandoned
   rawPayload       Json                  // Full webhook payload
   signature        String?               // HMAC signature received
@@ -275,6 +275,7 @@ model WebhookEvent {
   client           Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
   connection       DataSourceConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
 
+  @@unique([connectionId, eventId]) // Idempotency: unique per connection
   @@index([clientId])
   @@index([connectionId])
   @@index([eventId])
