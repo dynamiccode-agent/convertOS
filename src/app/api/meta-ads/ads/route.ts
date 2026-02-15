@@ -36,18 +36,21 @@ export async function GET(request: NextRequest) {
 
     // Get latest insights for each ad
     const adIds = ads.map(ad => ad.adId);
-    const insights = await prisma.metaAdInsights.findMany({
+    const insights = await prisma.metaInsight.findMany({
       where: {
-        adId: { in: adIds },
+        entityId: { in: adIds },
+        entityType: 'ad',
       },
-      orderBy: { date: 'desc' },
-      distinct: ['adId'],
+      orderBy: { dateStart: 'desc' },
     });
 
-    // Create a map of adId -> insights
-    const latestInsights = new Map(
-      insights.map(insight => [insight.adId, insight])
-    );
+    // Group insights by entityId and take the latest
+    const latestInsights = new Map();
+    insights.forEach(insight => {
+      if (!latestInsights.has(insight.entityId)) {
+        latestInsights.set(insight.entityId, insight);
+      }
+    });
 
     // Combine ads with their insights (convert Decimals to numbers)
     const adsWithMetrics = ads.map(ad => {

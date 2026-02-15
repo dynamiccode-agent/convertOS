@@ -26,13 +26,23 @@ export async function GET(request: Request) {
     const campaignIds = campaigns.map(c => c.campaignId);
 
     // Fetch latest insights for each campaign
-    const insights = await prisma.metaCampaignInsights.findMany({
+    const allInsights = await prisma.metaInsight.findMany({
       where: {
-        campaignId: { in: campaignIds },
+        entityId: { in: campaignIds },
+        entityType: 'campaign',
       },
-      orderBy: { date: 'desc' },
-      distinct: ['campaignId'],
+      orderBy: { dateStart: 'desc' },
     });
+
+    // Group by entityId and keep only the most recent
+    const latestInsightsMap = new Map();
+    allInsights.forEach(insight => {
+      if (!latestInsightsMap.has(insight.entityId)) {
+        latestInsightsMap.set(insight.entityId, insight);
+      }
+    });
+
+    const insights = Array.from(latestInsightsMap.values());
 
     // Calculate summary metrics
     let totalSpend = 0;

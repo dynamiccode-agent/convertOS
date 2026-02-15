@@ -12,7 +12,7 @@ export async function GET() {
     }
 
     // Fetch ad accounts from database
-    const accounts = await prisma.metaAccount.findMany({
+    const accounts = await prisma.metaAdAccount.findMany({
       select: {
         id: true,
         accountId: true,
