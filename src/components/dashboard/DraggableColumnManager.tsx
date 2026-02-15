@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 
@@ -97,8 +97,14 @@ export default function DraggableColumnManager({
   onColumnsChange,
 }: DraggableColumnManagerProps) {
   const [localColumns, setLocalColumns] = useState<ColumnConfig[]>(columns);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   if (!isOpen) return null;
+  if (!mounted) return null; // Don't render DnD on server
 
   const handleToggle = (columnId: string) => {
     setLocalColumns(prev =>

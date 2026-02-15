@@ -139,7 +139,7 @@ export default function SortableTable({
   };
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600">
       <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
         <thead className="bg-gray-50 dark:bg-gray-700/50">
           <tr>
