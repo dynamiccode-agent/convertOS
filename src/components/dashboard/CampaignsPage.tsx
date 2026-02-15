@@ -122,18 +122,7 @@ export default function CampaignsPage({ selectedAccount, accounts, onAccountChan
 
   // Apply cascading filters for Ad Sets tab
   if (activeTab === 'adsets' && selectedCampaignFilter !== 'all') {
-    console.log('[Filter Debug] Selected campaign filter:', selectedCampaignFilter);
-    console.log('[Filter Debug] Selected campaign filter TYPE:', typeof selectedCampaignFilter);
-    console.log('[Filter Debug] Total ad sets before campaign filter:', filteredAdSets.length);
-    console.log('[Filter Debug] Ad set campaign IDs:', filteredAdSets.map(as => ({ 
-      name: as.name, 
-      campaignId: as.campaignId,
-      campaignIdType: typeof as.campaignId,
-      matches: as.campaignId === selectedCampaignFilter,
-      looseMatches: as.campaignId == selectedCampaignFilter
-    })));
     filteredAdSets = filteredAdSets.filter(as => as.campaignId === selectedCampaignFilter);
-    console.log('[Filter Debug] Ad sets after campaign filter:', filteredAdSets.length);
   }
 
   // Apply cascading filters for Ads tab
