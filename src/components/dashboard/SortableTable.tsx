@@ -92,6 +92,18 @@ export default function SortableTable({
       );
     }
 
+    // Special handling for budget columns (stored as cents in string format)
+    if (column.id === 'dailyBudget' || column.id === 'lifetimeBudget') {
+      if (!value) return '-';
+      try {
+        const budgetInCents = parseFloat(value);
+        if (isNaN(budgetInCents)) return '-';
+        return `$${(budgetInCents / 100).toFixed(2)}`;
+      } catch {
+        return '-';
+      }
+    }
+
     switch (column.type) {
       case 'currency':
         return `$${Number(value).toFixed(2)}`;

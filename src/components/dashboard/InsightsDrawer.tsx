@@ -127,7 +127,7 @@ export default function InsightsDrawer({ isOpen, onClose, item, type }: Insights
                   </div>
                 </div>
               )}
-              {item.metrics?.costPerLead && Number(item.metrics.costPerLead) > 50 && (
+              {item.metrics?.costPerLead && Number(item.metrics.costPerLead) > 50 && Number(item.metrics.leads || 0) > 0 && (
                 <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
                   <div className="flex items-start gap-2">
                     <span className="text-yellow-600 dark:text-yellow-400">⚠</span>
@@ -137,12 +137,25 @@ export default function InsightsDrawer({ isOpen, onClose, item, type }: Insights
                   </div>
                 </div>
               )}
-              {item.metrics && Number(item.metrics.leads || 0) === 0 && Number(item.metrics.spend || 0) > 0 && (
+              {item.metrics && 
+               Number(item.metrics.leads || 0) === 0 && 
+               Number(item.metrics.purchases || 0) === 0 && 
+               Number(item.metrics.spend || 0) > 0 && (
                 <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
                   <div className="flex items-start gap-2">
                     <span className="text-red-600 dark:text-red-400">!</span>
                     <div className="text-sm text-red-900 dark:text-red-100">
-                      <strong>No Conversions:</strong> This {type} has spent ${Number(item.metrics.spend).toFixed(2)} with no leads. Consider pausing or testing new creatives.
+                      <strong>No Conversions:</strong> This {type} has spent ${Number(item.metrics.spend).toFixed(2)} with no leads or purchases. Consider pausing or testing new creatives.
+                    </div>
+                  </div>
+                </div>
+              )}
+              {item.metrics && Number(item.metrics.purchases || 0) > 0 && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-blue-600 dark:text-blue-400">📈</span>
+                    <div className="text-sm text-blue-900 dark:text-blue-100">
+                      <strong>Generating Sales:</strong> This {type} has {Number(item.metrics.purchases)} purchase{Number(item.metrics.purchases) !== 1 ? 's' : ''} at ${Number(item.metrics.costPerPurchase || 0).toFixed(2)} per sale.
                     </div>
                   </div>
                 </div>

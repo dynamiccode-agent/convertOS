@@ -5,7 +5,7 @@ import CampaignTabs from "./CampaignTabs";
 import CampaignFilters from "./CampaignFilters";
 import MetricsBar from "./MetricsBar";
 import SortableTable from "./SortableTable";
-import ColumnManager, { ColumnConfig } from "./ColumnManager";
+import DraggableColumnManager, { ColumnConfig } from "./DraggableColumnManager";
 import InsightsDrawer from "./InsightsDrawer";
 import HierarchyView from "./HierarchyView";
 
@@ -19,18 +19,21 @@ interface CampaignsPageProps {
 const DEFAULT_COLUMNS: ColumnConfig[] = [
   { id: 'name', label: 'Name', visible: true, order: 0, sortable: true, type: 'text' },
   { id: 'effectiveStatus', label: 'Status', visible: true, order: 1, sortable: true, type: 'text' },
-  { id: 'metrics.spend', label: 'Spend', visible: true, order: 2, sortable: true, type: 'currency' },
-  { id: 'metrics.impressions', label: 'Impressions', visible: true, order: 3, sortable: true, type: 'number' },
-  { id: 'metrics.clicks', label: 'Clicks', visible: true, order: 4, sortable: true, type: 'number' },
-  { id: 'metrics.ctr', label: 'CTR', visible: true, order: 5, sortable: true, type: 'percentage' },
-  { id: 'metrics.leads', label: 'Leads', visible: true, order: 6, sortable: true, type: 'number' },
-  { id: 'metrics.costPerLead', label: 'Cost/Lead', visible: true, order: 7, sortable: true, type: 'currency' },
-  { id: 'metrics.purchases', label: 'Purchases', visible: true, order: 8, sortable: true, type: 'number' },
-  { id: 'metrics.costPerPurchase', label: 'Cost/Purchase', visible: true, order: 9, sortable: true, type: 'currency' },
-  { id: 'metrics.reach', label: 'Reach', visible: false, order: 10, sortable: true, type: 'number' },
-  { id: 'metrics.frequency', label: 'Frequency', visible: false, order: 11, sortable: true, type: 'number' },
-  { id: 'metrics.cpc', label: 'CPC', visible: false, order: 12, sortable: true, type: 'currency' },
-  { id: 'metrics.cpm', label: 'CPM', visible: false, order: 13, sortable: true, type: 'currency' },
+  { id: 'dailyBudget', label: 'Daily Budget', visible: true, order: 2, sortable: true, type: 'currency' },
+  { id: 'lifetimeBudget', label: 'Lifetime Budget', visible: false, order: 3, sortable: true, type: 'currency' },
+  { id: 'metrics.spend', label: 'Spend', visible: true, order: 4, sortable: true, type: 'currency' },
+  { id: 'metrics.impressions', label: 'Impressions', visible: true, order: 5, sortable: true, type: 'number' },
+  { id: 'metrics.clicks', label: 'Clicks', visible: true, order: 6, sortable: true, type: 'number' },
+  { id: 'metrics.ctr', label: 'CTR', visible: true, order: 7, sortable: true, type: 'percentage' },
+  { id: 'metrics.leads', label: 'Leads', visible: true, order: 8, sortable: true, type: 'number' },
+  { id: 'metrics.costPerLead', label: 'Cost/Lead', visible: true, order: 9, sortable: true, type: 'currency' },
+  { id: 'metrics.purchases', label: 'Purchases', visible: true, order: 10, sortable: true, type: 'number' },
+  { id: 'metrics.costPerPurchase', label: 'Cost/Purchase', visible: true, order: 11, sortable: true, type: 'currency' },
+  { id: 'metrics.registrations', label: 'Registrations', visible: false, order: 12, sortable: true, type: 'number' },
+  { id: 'metrics.reach', label: 'Reach', visible: false, order: 13, sortable: true, type: 'number' },
+  { id: 'metrics.frequency', label: 'Frequency', visible: false, order: 14, sortable: true, type: 'number' },
+  { id: 'metrics.cpc', label: 'CPC', visible: false, order: 15, sortable: true, type: 'currency' },
+  { id: 'metrics.cpm', label: 'CPM', visible: false, order: 16, sortable: true, type: 'currency' },
 ];
 
 export default function CampaignsPage({ selectedAccount, accounts, onAccountChange }: CampaignsPageProps) {
@@ -213,7 +216,7 @@ export default function CampaignsPage({ selectedAccount, accounts, onAccountChan
       </div>
 
       {/* Column Manager Modal */}
-      <ColumnManager
+      <DraggableColumnManager
         isOpen={columnManagerOpen}
         onClose={() => setColumnManagerOpen(false)}
         columns={columns}
