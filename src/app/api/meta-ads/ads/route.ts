@@ -65,8 +65,9 @@ export async function GET(request: NextRequest) {
         status: ad.status,
         effectiveStatus: ad.effectiveStatus,
         creativeId: ad.creativeId,
-        creative: ad.creative,
-        previewUrl: ad.previewUrl,
+        creativeTitle: ad.creativeTitle,
+        creativeBody: ad.creativeBody,
+        creativeImageUrl: ad.creativeImageUrl,
         createdTime: ad.createdTime,
         metrics: insight ? {
           spend: insight.spend ? Number(insight.spend) : 0,
