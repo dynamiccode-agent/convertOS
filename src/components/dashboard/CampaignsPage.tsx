@@ -42,6 +42,11 @@ export default function CampaignsPage({ selectedAccount, accounts, onAccountChan
   const [dateRange, setDateRange] = useState('last_7d');
   const [loading, setLoading] = useState(true);
   
+  // Cascading filter states
+  const [selectedCampaignFilter, setSelectedCampaignFilter] = useState<string>('all');
+  const [selectedAdSetFilter, setSelectedAdSetFilter] = useState<string>('all');
+  const [hidePaused, setHidePaused] = useState(false);
+  
   // Data
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [adSets, setAdSets] = useState<any[]>([]);
@@ -90,16 +95,45 @@ export default function CampaignsPage({ selectedAccount, accounts, onAccountChan
 
   // Filter data by status
   const filterByStatus = (data: any[]) => {
-    if (statusFilter === 'all') return data;
+    let filtered = data;
+    
+    // Status filter
     if (statusFilter === 'active') {
-      return data.filter(item => item.effectiveStatus === 'ACTIVE' || item.status === 'ACTIVE');
+      filtered = filtered.filter(item => item.effectiveStatus === 'ACTIVE' || item.status === 'ACTIVE');
+    } else if (statusFilter === 'inactive') {
+      filtered = filtered.filter(item => item.effectiveStatus !== 'ACTIVE' && item.status !== 'ACTIVE');
     }
-    return data.filter(item => item.effectiveStatus !== 'ACTIVE' && item.status !== 'ACTIVE');
+    
+    // Hide paused filter
+    if (hidePaused) {
+      filtered = filtered.filter(item => {
+        const status = (item.effectiveStatus || item.status || '').toUpperCase();
+        return status !== 'PAUSED';
+      });
+    }
+    
+    return filtered;
   };
 
-  const filteredCampaigns = filterByStatus(campaigns);
-  const filteredAdSets = filterByStatus(adSets);
-  const filteredAds = filterByStatus(ads);
+  // Apply status filters
+  let filteredCampaigns = filterByStatus(campaigns);
+  let filteredAdSets = filterByStatus(adSets);
+  let filteredAds = filterByStatus(ads);
+
+  // Apply cascading filters for Ad Sets tab
+  if (activeTab === 'adsets' && selectedCampaignFilter !== 'all') {
+    filteredAdSets = filteredAdSets.filter(as => as.campaignId === selectedCampaignFilter);
+  }
+
+  // Apply cascading filters for Ads tab
+  if (activeTab === 'ads') {
+    if (selectedCampaignFilter !== 'all') {
+      filteredAds = filteredAds.filter(ad => ad.campaignId === selectedCampaignFilter);
+    }
+    if (selectedAdSetFilter !== 'all') {
+      filteredAds = filteredAds.filter(ad => ad.adsetId === selectedAdSetFilter);
+    }
+  }
 
   // Calculate metrics
   const calculateMetrics = () => {
@@ -147,7 +181,19 @@ export default function CampaignsPage({ selectedAccount, accounts, onAccountChan
       />
 
       {/* Tabs */}
-      <CampaignTabs activeTab={activeTab} onTabChange={setActiveTab} />
+      <CampaignTabs 
+        activeTab={activeTab} 
+        onTabChange={(tab) => {
+          setActiveTab(tab);
+          // Reset cascading filters when switching tabs
+          if (tab === 'campaigns' || tab === 'all') {
+            setSelectedCampaignFilter('all');
+            setSelectedAdSetFilter('all');
+          } else if (tab === 'adsets') {
+            setSelectedAdSetFilter('all');
+          }
+        }} 
+      />
 
       {/* Filters */}
       <CampaignFilters
@@ -156,6 +202,15 @@ export default function CampaignsPage({ selectedAccount, accounts, onAccountChan
         dateRange={dateRange}
         onDateRangeChange={setDateRange}
         onColumnSettingsClick={() => setColumnManagerOpen(true)}
+        activeTab={activeTab}
+        campaigns={campaigns}
+        adSets={adSets}
+        selectedCampaign={selectedCampaignFilter}
+        selectedAdSet={selectedAdSetFilter}
+        onCampaignChange={setSelectedCampaignFilter}
+        onAdSetChange={setSelectedAdSetFilter}
+        hidePaused={hidePaused}
+        onHidePausedChange={setHidePaused}
       />
 
       {/* Content Area */}

@@ -114,7 +114,7 @@ export default function DraggableColumnManager({
     );
   };
 
-  const moveColumn = useCallback((fromIndex: number, toIndex: number) => {
+  const moveColumn = (fromIndex: number, toIndex: number) => {
     setLocalColumns(prev => {
       const newColumns = [...prev];
       const [movedColumn] = newColumns.splice(fromIndex, 1);
@@ -122,7 +122,7 @@ export default function DraggableColumnManager({
       // Update order values
       return newColumns.map((col, idx) => ({ ...col, order: idx }));
     });
-  }, []);
+  };
 
   const handleApply = () => {
     onColumnsChange(localColumns);
