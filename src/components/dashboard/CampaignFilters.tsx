@@ -63,7 +63,12 @@ export default function CampaignFilters({
   console.log('[Campaign Filter Debug] Hide paused:', hidePaused);
   console.log('[Campaign Filter Debug] Total campaigns:', campaigns.length);
   console.log('[Campaign Filter Debug] Filtered campaigns:', filteredCampaigns.length);
-  console.log('[Campaign Filter Debug] Campaign details:', filteredCampaigns.map(c => ({ name: c.name, id: c.campaignId, status: c.effectiveStatus || c.status })));
+  console.log('[Campaign Filter Debug] Campaign details:', filteredCampaigns.map(c => ({ 
+    name: c.name, 
+    campaignId: c.campaignId, 
+    dbId: c.id,
+    status: c.effectiveStatus || c.status 
+  })));
 
   // Filter ad sets based on selected campaign
   const filteredAdSets = selectedCampaign === 'all' 
