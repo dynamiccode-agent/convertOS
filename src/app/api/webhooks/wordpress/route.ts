@@ -39,13 +39,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Read raw body (preserve exact bytes for HMAC)
-    const rawBody = await request.text();
+    // 3. Read raw body as bytes (ArrayBuffer → Buffer for HMAC)
+    const arrayBuffer = await request.arrayBuffer();
+    const rawBodyBuffer = Buffer.from(arrayBuffer);
     
-    // Parse JSON separately (after signature validation)
+    // 4. Validate HMAC signature BEFORE parsing JSON
+    const isValid = validateSignature(
+      rawBodyBuffer,
+      signature,
+      connection.connectionSecret,
+      connection.previousSecret
+    );
+
+    if (!isValid) {
+      await logFailedWebhook(
+        connection.clientId,
+        connection.id,
+        'unknown', // eventId not yet parsed
+        {},
+        signature,
+        'Invalid signature'
+      );
+
+      return NextResponse.json(
+        { error: 'Invalid signature' },
+        { status: 401 }
+      );
+    }
+    
+    // 5. Parse JSON only after signature validation
     let payload: any;
     try {
-      payload = JSON.parse(rawBody);
+      payload = JSON.parse(rawBodyBuffer.toString('utf8'));
     } catch (parseError) {
       return NextResponse.json(
         { error: 'Invalid JSON payload' },
@@ -62,31 +87,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Validate HMAC signature
-    const isValid = validateSignature(
-      rawBody,
-      signature,
-      connection.connectionSecret,
-      connection.previousSecret
-    );
-
-    if (!isValid) {
-      await logFailedWebhook(
-        connection.clientId,
-        connection.id,
-        eventId,
-        payload,
-        signature,
-        'Invalid signature'
-      );
-
-      return NextResponse.json(
-        { error: 'Invalid signature' },
-        { status: 401 }
-      );
-    }
-
-    // 5. Check idempotency - has this (connectionId + event_id) been processed?
+    // 6. Check idempotency - has this (connectionId + event_id) been processed?
     const existing = await prisma.webhookEvent.findUnique({
       where: {
         connectionId_eventId: {
@@ -191,9 +192,9 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Validate HMAC signature
+// Validate HMAC signature using raw bytes (Buffer)
 function validateSignature(
-  body: string,
+  bodyBuffer: Buffer,
   signature: string,
   secret: string | null,
   previousSecret: string | null
@@ -203,7 +204,7 @@ function validateSignature(
   // Try current secret
   const expectedSignature = crypto
     .createHmac('sha256', secret)
-    .update(body)
+    .update(bodyBuffer) // Raw bytes, no encoding conversion
     .digest('hex');
 
   if (signature === expectedSignature) {
@@ -214,7 +215,7 @@ function validateSignature(
   if (previousSecret) {
     const expectedPreviousSignature = crypto
       .createHmac('sha256', previousSecret)
-      .update(body)
+      .update(bodyBuffer) // Raw bytes
       .digest('hex');
 
     if (signature === expectedPreviousSignature) {

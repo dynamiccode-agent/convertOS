@@ -51,11 +51,12 @@ export async function POST(
     };
 
     const payloadJson = JSON.stringify(testPayload);
+    const payloadBuffer = Buffer.from(payloadJson, 'utf8');
 
-    // Generate HMAC signature
+    // Generate HMAC signature using raw bytes
     const signature = crypto
       .createHmac('sha256', connection.connectionSecret)
-      .update(payloadJson)
+      .update(payloadBuffer) // Use Buffer for consistency with webhook handler
       .digest('hex');
 
     // Send to our own webhook endpoint
