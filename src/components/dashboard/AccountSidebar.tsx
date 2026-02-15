@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { signOut } from "next-auth/react";
 
 interface Account {
   id: string;
@@ -166,7 +167,7 @@ export default function AccountSidebar({
       
       {/* User Profile */}
       <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-        <div className="flex items-center gap-3 px-4 py-2">
+        <div className="flex items-center gap-3 px-4 py-2 mb-2">
           <div className="w-8 h-8 rounded-full bg-violet-100 dark:bg-violet-900 flex items-center justify-center text-violet-600 dark:text-violet-400 font-semibold">
             {userEmail?.charAt(0).toUpperCase()}
           </div>
@@ -179,6 +180,17 @@ export default function AccountSidebar({
             </div>
           </div>
         </div>
+        
+        {/* Logout Button */}
+        <button
+          onClick={() => signOut({ callbackUrl: '/auth/signin' })}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          <span>Logout</span>
+        </button>
       </div>
     </aside>
   );
