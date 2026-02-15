@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
 const META_API_VERSION = process.env.META_API_VERSION || 'v24.0';
@@ -76,33 +74,50 @@ interface MetaInsightsData {
 
 export async function POST(request: Request) {
   try {
+    console.log('[Sync] POST request received');
+    
     const session = await getServerSession(authOptions);
+    console.log('[Sync] Session check:', session ? 'Authenticated' : 'Not authenticated');
     
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     if (!META_ACCESS_TOKEN) {
-      return NextResponse.json({ error: 'Meta API not configured' }, { status: 500 });
+      console.error('[Sync] META_ACCESS_TOKEN not found in environment');
+      return NextResponse.json({ error: 'Meta API not configured - ACCESS_TOKEN missing' }, { status: 500 });
     }
+
+    console.log('[Sync] META_ACCESS_TOKEN present:', META_ACCESS_TOKEN.substring(0, 20) + '...');
 
     const { datePreset = 'last_7d' } = await request.json();
 
     console.log(`[Sync] Starting sync with date preset: ${datePreset}`);
 
     // Fetch ad accounts
+    console.log('[Sync] Fetching ad accounts from Meta API...');
     const accountsResponse = await fetch(
       `https://graph.facebook.com/${META_API_VERSION}/me/adaccounts?fields=id,name,account_status,currency,timezone_name&access_token=${META_ACCESS_TOKEN}`
     );
 
+    console.log('[Sync] Meta API response status:', accountsResponse.status);
+
     if (!accountsResponse.ok) {
-      throw new Error(`Failed to fetch ad accounts: ${accountsResponse.statusText}`);
+      const errorText = await accountsResponse.text();
+      console.error('[Sync] Meta API error response:', errorText);
+      throw new Error(`Failed to fetch ad accounts: ${accountsResponse.statusText} - ${errorText}`);
     }
 
     const accountsData = await accountsResponse.json();
+    
+    if (accountsData.error) {
+      console.error('[Sync] Meta API returned error:', accountsData.error);
+      throw new Error(`Meta API error: ${accountsData.error.message || JSON.stringify(accountsData.error)}`);
+    }
+    
     const accounts: MetaAccount[] = accountsData.data || [];
 
-    console.log(`[Sync] Found ${accounts.length} ad accounts`);
+    console.log(`[Sync] Found ${accounts.length} ad accounts`, accounts.map(a => a.name));
 
     // Sync each account
     for (const account of accounts) {
@@ -253,8 +268,14 @@ export async function POST(request: Request) {
     });
   } catch (error: any) {
     console.error('[Sync] Error during sync:', error);
+    console.error('[Sync] Error stack:', error.stack);
     return NextResponse.json(
-      { error: 'Failed to sync data', details: error.message },
+      { 
+        success: false,
+        error: 'Failed to sync data', 
+        details: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     );
   }

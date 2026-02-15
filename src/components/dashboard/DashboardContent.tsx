@@ -86,13 +86,15 @@ export default function DashboardContent({ userEmail, userName }: DashboardConte
       if (data.success) {
         setLastSynced(new Date().toLocaleString());
         await fetchData();
-        alert('Data synced successfully!');
+        alert(`✅ Data synced successfully!\n\nSynced ${data.accountsSynced} account(s)`);
       } else {
-        alert('Sync failed: ' + data.error);
+        const errorMsg = data.details || data.error || 'Unknown error';
+        console.error('Sync error details:', data);
+        alert(`❌ Sync failed:\n\n${errorMsg}\n\nCheck browser console for more details.`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Sync error:', error);
-      alert('Sync failed');
+      alert(`❌ Sync failed:\n\nNetwork or server error\n\n${error.message}`);
     } finally {
       setSyncing(false);
     }
