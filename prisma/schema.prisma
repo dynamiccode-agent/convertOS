@@ -185,3 +185,264 @@ model MetaAuditLog {
   @@index([performedBy])
   @@index([createdAt])
 }
+
+// Multi-Tenant Client & Integration Models
+
+model Client {
+  id                     String                  @id @default(cuid())
+  name                   String
+  slug                   String                  @unique
+  domain                 String?
+  timezone               String                  @default("UTC")
+  status                 String                  @default("active") // active, suspended, deleted
+  metadata               Json?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  connections            DataSourceConnection[]
+  leads                  Lead[]
+  orders                 Order[]
+  checkoutEvents         CheckoutEvent[]
+  contacts               Contact[]
+  webhookEvents          WebhookEvent[]
+
+  @@index([slug])
+  @@index([status])
+}
+
+model DataSourceConnection {
+  id                String   @id @default(cuid())
+  clientId          String
+  type              String   // wordpress, meta, klaviyo
+  name              String
+  status            String   @default("active") // active, error, disconnected
+  
+  // Credentials (encrypted)
+  credentials       Json?    // type-specific credentials
+  
+  // WordPress-specific
+  webhookUrl        String?
+  connectionId      String?  @unique
+  connectionSecret  String?  // HMAC signing secret
+  previousSecret    String?  // For rotation (valid for 24h)
+  secretRotatedAt   DateTime?
+  domain            String?
+  
+  // Meta-specific (link to existing MetaAdAccount)
+  metaAccountId     String?
+  
+  // Klaviyo-specific
+  klaviyoApiKey     String?
+  klaviyoAccountId  String?
+  
+  // Observability
+  lastSeenAt        DateTime?
+  lastSyncAt        DateTime?
+  lastError         String?
+  lastErrorAt       DateTime?
+  metadata          Json?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  webhookEvents     WebhookEvent[]
+  leads             Lead[]
+  orders            Order[]
+  checkoutEvents    CheckoutEvent[]
+
+  @@index([clientId])
+  @@index([type])
+  @@index([status])
+  @@index([connectionId])
+}
+
+model WebhookEvent {
+  id               String                @id @default(cuid())
+  clientId         String
+  connectionId     String
+  eventId          String                @unique // For idempotency
+  eventType        String                // lead.created, order.paid, checkout.abandoned
+  rawPayload       Json                  // Full webhook payload
+  signature        String?               // HMAC signature received
+  signatureValid   Boolean               @default(false)
+  processed        Boolean               @default(false)
+  processedAt      DateTime?
+  error            String?
+  retryCount       Int                   @default(0)
+  receivedAt       DateTime              @default(now())
+  createdAt        DateTime              @default(now())
+  
+  client           Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  connection       DataSourceConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([connectionId])
+  @@index([eventId])
+  @@index([eventType])
+  @@index([processed])
+  @@index([receivedAt])
+}
+
+model Lead {
+  id               String                @id @default(cuid())
+  clientId         String
+  connectionId     String
+  
+  // Lead details
+  name             String?
+  email            String
+  phone            String?
+  registrationType String?               // free, base, paid
+  formName         String?
+  campaignName     String?
+  
+  // Attribution
+  utmSource        String?
+  utmMedium        String?
+  utmCampaign      String?
+  utmContent       String?
+  utmTerm          String?
+  referrer         String?
+  landingPage      String?
+  fbclid           String?
+  gclid            String?
+  
+  // Timestamps
+  registeredAt     DateTime
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  
+  client           Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  connection       DataSourceConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([connectionId])
+  @@index([email])
+  @@index([registeredAt])
+  @@index([utmSource])
+}
+
+model Order {
+  id               String                @id @default(cuid())
+  clientId         String
+  connectionId     String
+  
+  // Order details
+  orderId          String                @unique // External order ID (WooCommerce)
+  total            Decimal               @db.Decimal(10, 2)
+  currency         String                @default("USD")
+  status           String                // pending, paid, completed, refunded
+  paymentMethod    String?
+  couponCode       String?
+  
+  // Customer details
+  customerEmail    String
+  customerName     String?
+  customerPhone    String?
+  
+  // Attribution
+  utmSource        String?
+  utmMedium        String?
+  utmCampaign      String?
+  utmContent       String?
+  utmTerm          String?
+  referrer         String?
+  fbclid           String?
+  gclid            String?
+  originSource     String?               // Captured from WooCommerce/FunnelKit
+  
+  // FunnelKit
+  funnelId         String?
+  checkoutId       String?
+  
+  // Timestamps
+  orderDate        DateTime
+  paidAt           DateTime?
+  refundedAt       DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  
+  client           Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  connection       DataSourceConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([connectionId])
+  @@index([orderId])
+  @@index([customerEmail])
+  @@index([orderDate])
+  @@index([status])
+  @@index([utmSource])
+}
+
+model CheckoutEvent {
+  id               String                @id @default(cuid())
+  clientId         String
+  connectionId     String
+  
+  // Event details
+  eventType        String                // started, abandoned, completed
+  funnelId         String?
+  checkoutId       String?
+  step             String?
+  
+  // Customer details (if captured)
+  email            String?
+  phone            String?
+  
+  // Attribution
+  utmSource        String?
+  utmMedium        String?
+  utmCampaign      String?
+  utmContent       String?
+  utmTerm          String?
+  referrer         String?
+  
+  // Timestamps
+  eventDate        DateTime
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  
+  client           Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  connection       DataSourceConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([connectionId])
+  @@index([eventType])
+  @@index([eventDate])
+  @@index([email])
+}
+
+model Contact {
+  id               String   @id @default(cuid())
+  clientId         String
+  
+  // Contact details
+  email            String
+  name             String?
+  phone            String?
+  contactType      String   // free, paid, lead, customer
+  status           String   @default("active") // active, unsubscribed, bounced
+  
+  // Source tracking
+  firstSource      String?  // First known source
+  lastSource       String?  // Most recent source
+  
+  // Aggregated data
+  totalOrders      Int      @default(0)
+  totalSpent       Decimal  @default(0) @db.Decimal(10, 2)
+  leadCount        Int      @default(0)
+  
+  // Timestamps
+  firstSeen        DateTime
+  lastSeen         DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  client           Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, email])
+  @@index([clientId])
+  @@index([email])
+  @@index([contactType])
+  @@index([status])
+}
