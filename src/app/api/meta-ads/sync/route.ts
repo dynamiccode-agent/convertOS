@@ -270,9 +270,13 @@ export async function POST(request: Request) {
               }
 
               for (const adSet of adSets) {
-                // Use campaign_id from ad set if available, otherwise use parent campaign
-                const adSetCampaignId = adSet.campaign_id || campaign.id;
-                console.log(`[Sync] Storing ad set ${adSet.id} (${adSet.name}) with campaignId: ${adSetCampaignId} (parent campaign: ${campaign.id}, meta returned: ${adSet.campaign_id})`);
+                // ALWAYS use parent campaign ID - Meta's campaign_id field is unreliable
+                // when fetched via /campaigns/{id}/adsets endpoint
+                const adSetCampaignId = campaign.id;
+                
+                if (adSet.campaign_id && adSet.campaign_id !== campaign.id) {
+                  console.log(`[Sync] WARNING: Ad set ${adSet.id} (${adSet.name}) returned campaign_id ${adSet.campaign_id} but parent campaign is ${campaign.id}. Using parent.`);
+                }
                 
                 await prisma.metaAdSet.upsert({
                   where: { adsetId: adSet.id },
