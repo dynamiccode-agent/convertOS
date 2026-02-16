@@ -2,8 +2,15 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 
+// Allow up to 5 minutes for full sync across all accounts
+export const maxDuration = 300;
+export const dynamic = 'force-dynamic';
+
 const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
 const META_API_VERSION = process.env.META_API_VERSION || 'v24.0';
+
+// Statuses where fetching insights is pointless (no recent data)
+const SKIP_INSIGHT_STATUSES = new Set(['DELETED', 'ARCHIVED']);
 
 interface MetaAccount {
   id: string;
@@ -171,6 +178,30 @@ async function upsertInsight(
   });
 }
 
+// Helper to run insight fetches in parallel batches
+async function fetchInsightsBatch(
+  items: Array<{ id: string; effectiveStatus?: string }>,
+  entityType: string,
+  datePreset: string,
+  batchSize: number = 10,
+) {
+  // Filter out entities where insights would be empty
+  const eligible = items.filter(
+    item => !SKIP_INSIGHT_STATUSES.has(item.effectiveStatus || '')
+  );
+
+  for (let i = 0; i < eligible.length; i += batchSize) {
+    const batch = eligible.slice(i, i + batchSize);
+    await Promise.allSettled(
+      batch.map(item =>
+        upsertInsight(item.id, entityType, datePreset).catch(err =>
+          console.error(`[Sync] Failed insight for ${entityType} ${item.id}:`, err)
+        )
+      )
+    );
+  }
+}
+
 export async function POST(request: Request) {
   try {
     console.log('[Sync] POST request received');
@@ -286,14 +317,14 @@ export async function POST(request: Request) {
             lastSyncedAt: new Date(),
           },
         });
-
-        // Campaign insights
-        try {
-          await upsertInsight(campaign.id, 'campaign', datePreset);
-        } catch (error) {
-          console.error(`[Sync] Failed to fetch insights for campaign ${campaign.id}:`, error);
-        }
       }
+
+      // Campaign insights (parallel batches of 10)
+      await fetchInsightsBatch(
+        campaigns.map(c => ({ id: c.id, effectiveStatus: c.effective_status })),
+        'campaign',
+        datePreset,
+      );
 
       // ──────────────────────────────────────────────────
       // STEP 2: Sync ad sets (account-level fetch)
@@ -344,16 +375,16 @@ export async function POST(request: Request) {
             lastSyncedAt: new Date(),
           },
         });
-
-        // Ad set insights
-        try {
-          await upsertInsight(adSet.id, 'adset', datePreset);
-        } catch (error) {
-          console.error(`[Sync] Failed to fetch insights for ad set ${adSet.id}:`, error);
-        }
-
-        totalAdSetsSynced++;
       }
+
+      totalAdSetsSynced += adSets.length;
+
+      // Ad set insights (parallel batches of 10)
+      await fetchInsightsBatch(
+        adSets.map(a => ({ id: a.id, effectiveStatus: a.effective_status })),
+        'adset',
+        datePreset,
+      );
 
       // ──────────────────────────────────────────────────
       // STEP 3: Sync ads (account-level fetch)
@@ -399,16 +430,16 @@ export async function POST(request: Request) {
             lastSyncedAt: new Date(),
           },
         });
-
-        // Ad insights
-        try {
-          await upsertInsight(ad.id, 'ad', datePreset);
-        } catch (error) {
-          console.error(`[Sync] Failed to fetch insights for ad ${ad.id}:`, error);
-        }
-
-        totalAdsSynced++;
       }
+
+      totalAdsSynced += ads.length;
+
+      // Ad insights (parallel batches of 10)
+      await fetchInsightsBatch(
+        ads.map(a => ({ id: a.id, effectiveStatus: a.effective_status })),
+        'ad',
+        datePreset,
+      );
     }
 
     console.log(`[Sync] Sync completed: ${accounts.length} accounts, ${totalAdSetsSynced} ad sets, ${totalAdsSynced} ads`);
