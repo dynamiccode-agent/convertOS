@@ -18,6 +18,7 @@ export async function GET() {
         name: true,
         accountStatus: true,
         currency: true,
+        lastSyncedAt: true,
       },
       orderBy: { name: 'asc' },
     });
@@ -28,6 +29,7 @@ export async function GET() {
       name: account.name,
       account_status: account.accountStatus,
       currency: account.currency,
+      lastSyncedAt: account.lastSyncedAt?.toISOString() || null,
     }));
 
     return NextResponse.json({

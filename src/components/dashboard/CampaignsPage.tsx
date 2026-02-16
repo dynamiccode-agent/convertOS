@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useImperativeHandle, forwardRef, useCallback } from "react";
 import CampaignTabs from "./CampaignTabs";
 import CampaignFilters from "./CampaignFilters";
 import MetricsBar from "./MetricsBar";
@@ -8,6 +8,10 @@ import SortableTable from "./SortableTable";
 import DraggableColumnManager, { ColumnConfig } from "./DraggableColumnManager";
 import InsightsDrawer from "./InsightsDrawer";
 import HierarchyView from "./HierarchyView";
+
+export interface CampaignsPageHandle {
+  refresh: () => void;
+}
 
 interface CampaignsPageProps {
   selectedAccount: string;
@@ -36,7 +40,7 @@ const DEFAULT_COLUMNS: ColumnConfig[] = [
   { id: 'metrics.cpm', label: 'CPM', visible: false, order: 16, sortable: true, type: 'currency' },
 ];
 
-export default function CampaignsPage({ selectedAccount, accounts, onAccountChange }: CampaignsPageProps) {
+const CampaignsPage = forwardRef<CampaignsPageHandle, CampaignsPageProps>(function CampaignsPage({ selectedAccount, accounts, onAccountChange }, ref) {
   const [activeTab, setActiveTab] = useState<'all' | 'campaigns' | 'adsets' | 'ads'>('campaigns');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('active');
   const [dateRange, setDateRange] = useState('last_7d');
@@ -59,11 +63,7 @@ export default function CampaignsPage({ selectedAccount, accounts, onAccountChan
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [selectedType, setSelectedType] = useState<'campaign' | 'adset' | 'ad'>('campaign');
 
-  useEffect(() => {
-    fetchAllData();
-  }, [selectedAccount, dateRange]);
-
-  const fetchAllData = async () => {
+  const fetchAllData = useCallback(async () => {
     setLoading(true);
     try {
       // Fetch campaigns with date range
@@ -91,7 +91,15 @@ export default function CampaignsPage({ selectedAccount, accounts, onAccountChan
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedAccount, dateRange]);
+
+  useEffect(() => {
+    fetchAllData();
+  }, [fetchAllData]);
+
+  useImperativeHandle(ref, () => ({
+    refresh: fetchAllData,
+  }));
 
   // Filter data by status
   const filterByStatus = (data: any[]) => {
@@ -289,4 +297,6 @@ export default function CampaignsPage({ selectedAccount, accounts, onAccountChan
       />
     </div>
   );
-}
+});
+
+export default CampaignsPage;

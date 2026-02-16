@@ -202,259 +202,261 @@ async function fetchInsightsBatch(
   }
 }
 
+// Sync a single account: campaigns, ad sets, ads + insights
+async function syncAccount(accountId: string, datePreset: string) {
+  let adSetsSynced = 0;
+  let adsSynced = 0;
+
+  // Campaigns
+  const campaigns = await fetchAllPages<MetaCampaign>(
+    `https://graph.facebook.com/${META_API_VERSION}/${accountId}/campaigns?fields=id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,created_time,start_time,stop_time&access_token=${META_ACCESS_TOKEN}&limit=500`
+  );
+
+  console.log(`[Sync] Account ${accountId}: ${campaigns.length} campaigns`);
+
+  for (const campaign of campaigns) {
+    await prisma.metaCampaign.upsert({
+      where: { campaignId: campaign.id },
+      update: {
+        name: campaign.name,
+        objective: campaign.objective,
+        status: campaign.status,
+        effectiveStatus: campaign.effective_status,
+        dailyBudget: campaign.daily_budget,
+        lifetimeBudget: campaign.lifetime_budget,
+        budgetRemaining: campaign.budget_remaining,
+        createdTime: campaign.created_time ? new Date(campaign.created_time) : null,
+        startTime: campaign.start_time ? new Date(campaign.start_time) : null,
+        stopTime: campaign.stop_time ? new Date(campaign.stop_time) : null,
+        lastSyncedAt: new Date(),
+      },
+      create: {
+        campaignId: campaign.id,
+        accountId,
+        name: campaign.name,
+        objective: campaign.objective,
+        status: campaign.status,
+        effectiveStatus: campaign.effective_status,
+        dailyBudget: campaign.daily_budget,
+        lifetimeBudget: campaign.lifetime_budget,
+        budgetRemaining: campaign.budget_remaining,
+        createdTime: campaign.created_time ? new Date(campaign.created_time) : null,
+        startTime: campaign.start_time ? new Date(campaign.start_time) : null,
+        stopTime: campaign.stop_time ? new Date(campaign.stop_time) : null,
+        lastSyncedAt: new Date(),
+      },
+    });
+  }
+
+  await fetchInsightsBatch(
+    campaigns.map(c => ({ id: c.id, effectiveStatus: c.effective_status })),
+    'campaign',
+    datePreset,
+  );
+
+  // Ad sets (account-level to catch Advantage+, ASC, etc.)
+  const adSets = await fetchAllPages<MetaAdSet>(
+    `https://graph.facebook.com/${META_API_VERSION}/${accountId}/adsets?fields=id,name,campaign_id,status,effective_status,optimization_goal,bid_strategy,daily_budget,lifetime_budget,created_time,start_time,end_time&access_token=${META_ACCESS_TOKEN}&limit=500`
+  );
+
+  console.log(`[Sync] Account ${accountId}: ${adSets.length} ad sets`);
+
+  for (const adSet of adSets) {
+    await prisma.metaAdSet.upsert({
+      where: { adsetId: adSet.id },
+      update: {
+        name: adSet.name,
+        campaignId: adSet.campaign_id || 'unknown',
+        accountId,
+        status: adSet.status,
+        effectiveStatus: adSet.effective_status,
+        optimizationGoal: adSet.optimization_goal,
+        bidStrategy: adSet.bid_strategy,
+        dailyBudget: adSet.daily_budget,
+        lifetimeBudget: adSet.lifetime_budget,
+        createdTime: adSet.created_time ? new Date(adSet.created_time) : null,
+        startTime: adSet.start_time ? new Date(adSet.start_time) : null,
+        endTime: adSet.end_time ? new Date(adSet.end_time) : null,
+        lastSyncedAt: new Date(),
+      },
+      create: {
+        adsetId: adSet.id,
+        campaignId: adSet.campaign_id || 'unknown',
+        accountId,
+        name: adSet.name,
+        status: adSet.status,
+        effectiveStatus: adSet.effective_status,
+        optimizationGoal: adSet.optimization_goal,
+        bidStrategy: adSet.bid_strategy,
+        dailyBudget: adSet.daily_budget,
+        lifetimeBudget: adSet.lifetime_budget,
+        createdTime: adSet.created_time ? new Date(adSet.created_time) : null,
+        startTime: adSet.start_time ? new Date(adSet.start_time) : null,
+        endTime: adSet.end_time ? new Date(adSet.end_time) : null,
+        lastSyncedAt: new Date(),
+      },
+    });
+  }
+
+  adSetsSynced = adSets.length;
+
+  await fetchInsightsBatch(
+    adSets.map(a => ({ id: a.id, effectiveStatus: a.effective_status })),
+    'adset',
+    datePreset,
+  );
+
+  // Ads (account-level)
+  const ads = await fetchAllPages<MetaAd>(
+    `https://graph.facebook.com/${META_API_VERSION}/${accountId}/ads?fields=id,name,adset_id,campaign_id,status,effective_status,creative{id,title,body,image_url,thumbnail_url},created_time&access_token=${META_ACCESS_TOKEN}&limit=500`
+  );
+
+  console.log(`[Sync] Account ${accountId}: ${ads.length} ads`);
+
+  for (const ad of ads) {
+    await prisma.metaAd.upsert({
+      where: { adId: ad.id },
+      update: {
+        name: ad.name,
+        adsetId: ad.adset_id || 'unknown',
+        campaignId: ad.campaign_id || 'unknown',
+        accountId,
+        status: ad.status,
+        effectiveStatus: ad.effective_status,
+        creativeId: ad.creative?.id,
+        creativeTitle: ad.creative?.title,
+        creativeBody: ad.creative?.body,
+        creativeImageUrl: ad.creative?.image_url || ad.creative?.thumbnail_url,
+        createdTime: ad.created_time ? new Date(ad.created_time) : null,
+        lastSyncedAt: new Date(),
+      },
+      create: {
+        adId: ad.id,
+        adsetId: ad.adset_id || 'unknown',
+        campaignId: ad.campaign_id || 'unknown',
+        accountId,
+        name: ad.name,
+        status: ad.status,
+        effectiveStatus: ad.effective_status,
+        creativeId: ad.creative?.id,
+        creativeTitle: ad.creative?.title,
+        creativeBody: ad.creative?.body,
+        creativeImageUrl: ad.creative?.image_url || ad.creative?.thumbnail_url,
+        createdTime: ad.created_time ? new Date(ad.created_time) : null,
+        lastSyncedAt: new Date(),
+      },
+    });
+  }
+
+  adsSynced = ads.length;
+
+  await fetchInsightsBatch(
+    ads.map(a => ({ id: a.id, effectiveStatus: a.effective_status })),
+    'ad',
+    datePreset,
+  );
+
+  // Update lastSyncedAt on the account
+  await prisma.metaAdAccount.update({
+    where: { accountId },
+    data: { lastSyncedAt: new Date() },
+  });
+
+  return { campaigns: campaigns.length, adSetsSynced, adsSynced };
+}
+
 export async function POST(request: Request) {
   try {
     console.log('[Sync] POST request received');
     
     const session = await auth();
-    console.log('[Sync] Session check:', session ? 'Authenticated' : 'Not authenticated');
-    
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     if (!META_ACCESS_TOKEN) {
-      console.error('[Sync] META_ACCESS_TOKEN not found in environment');
       return NextResponse.json({ error: 'Meta API not configured - ACCESS_TOKEN missing' }, { status: 500 });
     }
 
-    console.log('[Sync] META_ACCESS_TOKEN present:', META_ACCESS_TOKEN.substring(0, 20) + '...');
+    const body = await request.json();
+    const { datePreset = 'last_7d', accountId } = body;
 
-    const { datePreset = 'last_7d' } = await request.json();
-
-    console.log(`[Sync] Starting sync with date preset: ${datePreset}`);
-
-    // Fetch ad accounts
-    console.log('[Sync] Fetching ad accounts from Meta API...');
+    // ──────────────────────────────────────────────────
+    // Always refresh the accounts list from Meta
+    // (lightweight: single API call)
+    // ──────────────────────────────────────────────────
+    console.log('[Sync] Refreshing accounts list from Meta...');
     const accountsResponse = await fetch(
       `https://graph.facebook.com/${META_API_VERSION}/me/adaccounts?fields=id,name,account_status,currency,timezone_name&access_token=${META_ACCESS_TOKEN}`
     );
 
-    console.log('[Sync] Meta API response status:', accountsResponse.status);
-
     if (!accountsResponse.ok) {
       const errorText = await accountsResponse.text();
-      console.error('[Sync] Meta API error response:', errorText);
       throw new Error(`Failed to fetch ad accounts: ${accountsResponse.statusText} - ${errorText}`);
     }
 
     const accountsData = await accountsResponse.json();
-    
     if (accountsData.error) {
-      console.error('[Sync] Meta API returned error:', accountsData.error);
       throw new Error(`Meta API error: ${accountsData.error.message || JSON.stringify(accountsData.error)}`);
     }
-    
-    const accounts: MetaAccount[] = accountsData.data || [];
 
-    console.log(`[Sync] Found ${accounts.length} ad accounts`, accounts.map(a => a.name));
+    const allAccounts: MetaAccount[] = accountsData.data || [];
+    console.log(`[Sync] Found ${allAccounts.length} ad accounts`);
 
-    let totalAdSetsSynced = 0;
-    let totalAdsSynced = 0;
-
-    // Sync each account
-    for (const account of accounts) {
-      const accountId = account.id;
-
-      // Store account in database
+    // Upsert all accounts (quick, no deep sync)
+    for (const acct of allAccounts) {
       await prisma.metaAdAccount.upsert({
-        where: { accountId },
+        where: { accountId: acct.id },
         update: {
-          name: account.name,
-          currency: account.currency,
-          timezone: account.timezone_name,
-          accountStatus: account.account_status,
-          lastSyncedAt: new Date(),
+          name: acct.name,
+          currency: acct.currency,
+          timezone: acct.timezone_name,
+          accountStatus: acct.account_status,
         },
         create: {
-          accountId,
-          name: account.name,
-          currency: account.currency,
-          timezone: account.timezone_name,
-          accountStatus: account.account_status,
-          lastSyncedAt: new Date(),
+          accountId: acct.id,
+          name: acct.name,
+          currency: acct.currency,
+          timezone: acct.timezone_name,
+          accountStatus: acct.account_status,
         },
       });
-
-      // ──────────────────────────────────────────────────
-      // STEP 1: Sync campaigns (account-level)
-      // ──────────────────────────────────────────────────
-      const campaigns = await fetchAllPages<MetaCampaign>(
-        `https://graph.facebook.com/${META_API_VERSION}/${accountId}/campaigns?fields=id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,created_time,start_time,stop_time&access_token=${META_ACCESS_TOKEN}&limit=500`
-      );
-
-      console.log(`[Sync] Account ${account.name} (${accountId}): ${campaigns.length} campaigns`);
-
-      for (const campaign of campaigns) {
-        await prisma.metaCampaign.upsert({
-          where: { campaignId: campaign.id },
-          update: {
-            name: campaign.name,
-            objective: campaign.objective,
-            status: campaign.status,
-            effectiveStatus: campaign.effective_status,
-            dailyBudget: campaign.daily_budget,
-            lifetimeBudget: campaign.lifetime_budget,
-            budgetRemaining: campaign.budget_remaining,
-            createdTime: campaign.created_time ? new Date(campaign.created_time) : null,
-            startTime: campaign.start_time ? new Date(campaign.start_time) : null,
-            stopTime: campaign.stop_time ? new Date(campaign.stop_time) : null,
-            lastSyncedAt: new Date(),
-          },
-          create: {
-            campaignId: campaign.id,
-            accountId,
-            name: campaign.name,
-            objective: campaign.objective,
-            status: campaign.status,
-            effectiveStatus: campaign.effective_status,
-            dailyBudget: campaign.daily_budget,
-            lifetimeBudget: campaign.lifetime_budget,
-            budgetRemaining: campaign.budget_remaining,
-            createdTime: campaign.created_time ? new Date(campaign.created_time) : null,
-            startTime: campaign.start_time ? new Date(campaign.start_time) : null,
-            stopTime: campaign.stop_time ? new Date(campaign.stop_time) : null,
-            lastSyncedAt: new Date(),
-          },
-        });
-      }
-
-      // Campaign insights (parallel batches of 10)
-      await fetchInsightsBatch(
-        campaigns.map(c => ({ id: c.id, effectiveStatus: c.effective_status })),
-        'campaign',
-        datePreset,
-      );
-
-      // ──────────────────────────────────────────────────
-      // STEP 2: Sync ad sets (account-level fetch)
-      // Fetches ALL ad sets including Advantage+, ASC, and
-      // other automated campaign types that don't return
-      // ad sets via the per-campaign endpoint.
-      // ──────────────────────────────────────────────────
-      const adSets = await fetchAllPages<MetaAdSet>(
-        `https://graph.facebook.com/${META_API_VERSION}/${accountId}/adsets?fields=id,name,campaign_id,status,effective_status,optimization_goal,bid_strategy,daily_budget,lifetime_budget,created_time,start_time,end_time&access_token=${META_ACCESS_TOKEN}&limit=500`
-      );
-
-      console.log(`[Sync] Account ${account.name}: ${adSets.length} ad sets (account-level)`);
-
-      for (const adSet of adSets) {
-        const adSetCampaignId = adSet.campaign_id || 'unknown';
-
-        await prisma.metaAdSet.upsert({
-          where: { adsetId: adSet.id },
-          update: {
-            name: adSet.name,
-            campaignId: adSetCampaignId,
-            accountId,
-            status: adSet.status,
-            effectiveStatus: adSet.effective_status,
-            optimizationGoal: adSet.optimization_goal,
-            bidStrategy: adSet.bid_strategy,
-            dailyBudget: adSet.daily_budget,
-            lifetimeBudget: adSet.lifetime_budget,
-            createdTime: adSet.created_time ? new Date(adSet.created_time) : null,
-            startTime: adSet.start_time ? new Date(adSet.start_time) : null,
-            endTime: adSet.end_time ? new Date(adSet.end_time) : null,
-            lastSyncedAt: new Date(),
-          },
-          create: {
-            adsetId: adSet.id,
-            campaignId: adSetCampaignId,
-            accountId,
-            name: adSet.name,
-            status: adSet.status,
-            effectiveStatus: adSet.effective_status,
-            optimizationGoal: adSet.optimization_goal,
-            bidStrategy: adSet.bid_strategy,
-            dailyBudget: adSet.daily_budget,
-            lifetimeBudget: adSet.lifetime_budget,
-            createdTime: adSet.created_time ? new Date(adSet.created_time) : null,
-            startTime: adSet.start_time ? new Date(adSet.start_time) : null,
-            endTime: adSet.end_time ? new Date(adSet.end_time) : null,
-            lastSyncedAt: new Date(),
-          },
-        });
-      }
-
-      totalAdSetsSynced += adSets.length;
-
-      // Ad set insights (parallel batches of 10)
-      await fetchInsightsBatch(
-        adSets.map(a => ({ id: a.id, effectiveStatus: a.effective_status })),
-        'adset',
-        datePreset,
-      );
-
-      // ──────────────────────────────────────────────────
-      // STEP 3: Sync ads (account-level fetch)
-      // Same rationale: account-level catches all ads
-      // regardless of campaign type.
-      // ──────────────────────────────────────────────────
-      const ads = await fetchAllPages<MetaAd>(
-        `https://graph.facebook.com/${META_API_VERSION}/${accountId}/ads?fields=id,name,adset_id,campaign_id,status,effective_status,creative{id,title,body,image_url,thumbnail_url},created_time&access_token=${META_ACCESS_TOKEN}&limit=500`
-      );
-
-      console.log(`[Sync] Account ${account.name}: ${ads.length} ads (account-level)`);
-
-      for (const ad of ads) {
-        await prisma.metaAd.upsert({
-          where: { adId: ad.id },
-          update: {
-            name: ad.name,
-            adsetId: ad.adset_id || 'unknown',
-            campaignId: ad.campaign_id || 'unknown',
-            accountId,
-            status: ad.status,
-            effectiveStatus: ad.effective_status,
-            creativeId: ad.creative?.id,
-            creativeTitle: ad.creative?.title,
-            creativeBody: ad.creative?.body,
-            creativeImageUrl: ad.creative?.image_url || ad.creative?.thumbnail_url,
-            createdTime: ad.created_time ? new Date(ad.created_time) : null,
-            lastSyncedAt: new Date(),
-          },
-          create: {
-            adId: ad.id,
-            adsetId: ad.adset_id || 'unknown',
-            campaignId: ad.campaign_id || 'unknown',
-            accountId,
-            name: ad.name,
-            status: ad.status,
-            effectiveStatus: ad.effective_status,
-            creativeId: ad.creative?.id,
-            creativeTitle: ad.creative?.title,
-            creativeBody: ad.creative?.body,
-            creativeImageUrl: ad.creative?.image_url || ad.creative?.thumbnail_url,
-            createdTime: ad.created_time ? new Date(ad.created_time) : null,
-            lastSyncedAt: new Date(),
-          },
-        });
-      }
-
-      totalAdsSynced += ads.length;
-
-      // Ad insights (parallel batches of 10)
-      await fetchInsightsBatch(
-        ads.map(a => ({ id: a.id, effectiveStatus: a.effective_status })),
-        'ad',
-        datePreset,
-      );
     }
 
-    console.log(`[Sync] Sync completed: ${accounts.length} accounts, ${totalAdSetsSynced} ad sets, ${totalAdsSynced} ads`);
+    // ──────────────────────────────────────────────────
+    // If a specific accountId was provided, deep-sync
+    // only that account. Otherwise just return the
+    // refreshed accounts list.
+    // ──────────────────────────────────────────────────
+    if (accountId && accountId !== 'all') {
+      console.log(`[Sync] Deep-syncing single account: ${accountId}`);
+      const result = await syncAccount(accountId, datePreset);
+
+      console.log(`[Sync] Done: ${result.campaigns} campaigns, ${result.adSetsSynced} ad sets, ${result.adsSynced} ads`);
+
+      return NextResponse.json({
+        success: true,
+        message: `Synced 1 account`,
+        accountsSynced: 1,
+        campaignsSynced: result.campaigns,
+        adSetsSynced: result.adSetsSynced,
+        adsSynced: result.adsSynced,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // No specific account: just return refreshed accounts list
+    console.log('[Sync] Accounts list refreshed (no deep sync requested)');
 
     return NextResponse.json({
       success: true,
-      message: 'Data synced successfully',
-      accountsSynced: accounts.length,
-      adSetsSynced: totalAdSetsSynced,
-      adsSynced: totalAdsSynced,
+      message: `Refreshed ${allAccounts.length} accounts`,
+      accountsSynced: allAccounts.length,
+      accountsOnly: true,
       timestamp: new Date().toISOString(),
     });
   } catch (error: any) {
     console.error('[Sync] Error during sync:', error);
-    console.error('[Sync] Error stack:', error.stack);
     return NextResponse.json(
       { 
         success: false,

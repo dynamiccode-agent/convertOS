@@ -8,6 +8,7 @@ interface Account {
   id: string;
   name: string;
   account_status?: number;
+  lastSyncedAt?: string | null;
 }
 
 interface AccountSidebarProps {
@@ -29,6 +30,18 @@ export default function AccountSidebar({
   const [loading, setLoading] = useState(true);
   const [accountsExpanded, setAccountsExpanded] = useState(true);
   const [contactsExpanded, setContactsExpanded] = useState(false);
+
+  const formatTimeAgo = (isoString: string | null | undefined) => {
+    if (!isoString) return 'Never synced';
+    const diff = Date.now() - new Date(isoString).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  };
 
   useEffect(() => {
     fetchAccounts();
@@ -131,7 +144,14 @@ export default function AccountSidebar({
                           : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                       }`}
                     >
-                      {account.name}
+                      <div>{account.name}</div>
+                      <div className={`text-[10px] mt-0.5 ${
+                        selectedAccount === account.id
+                          ? "text-violet-400 dark:text-violet-500"
+                          : "text-gray-400 dark:text-gray-500"
+                      }`}>
+                        {formatTimeAgo(account.lastSyncedAt)}
+                      </div>
                     </button>
                   ))}
                 </div>

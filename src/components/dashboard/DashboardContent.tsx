@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import AccountSidebar from "./AccountSidebar";
-import CampaignsPage from "./CampaignsPage";
+import CampaignsPage, { CampaignsPageHandle } from "./CampaignsPage";
 
 interface DashboardContentProps {
   userEmail?: string | null;
@@ -12,6 +12,7 @@ interface DashboardContentProps {
 interface Account {
   id: string;
   name: string;
+  lastSyncedAt?: string | null;
 }
 
 export default function DashboardContent({ userEmail, userName }: DashboardContentProps) {
@@ -20,6 +21,7 @@ export default function DashboardContent({ userEmail, userName }: DashboardConte
   const [syncing, setSyncing] = useState(false);
   const [lastSynced, setLastSynced] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const campaignsRef = useRef<CampaignsPageHandle>(null);
 
   useEffect(() => {
     fetchAccounts();
@@ -45,26 +47,33 @@ export default function DashboardContent({ userEmail, userName }: DashboardConte
       const response = await fetch('/api/meta-ads/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ datePreset: 'last_7d' }),
+        body: JSON.stringify({
+          datePreset: 'last_7d',
+          accountId: selectedAccount !== 'all' ? selectedAccount : undefined,
+        }),
       });
 
       const data = await response.json();
       if (data.success) {
         setLastSynced(new Date().toLocaleString());
         await fetchAccounts();
-        
-        // Show success message
-        const accountsText = data.accountsSynced === 1 ? 'account' : 'accounts';
-        const adSetsText = data.adSetsSynced != null ? `\n${data.adSetsSynced} ad sets` : '';
-        const adsText = data.adsSynced != null ? `\n${data.adsSynced} ads` : '';
-        alert(`✅ Data synced successfully!\n\nSynced ${data.accountsSynced} ${accountsText}${adSetsText}${adsText}\n\nRefreshing dashboard...`);
-        
-        // Refresh the page to load new data
-        window.location.reload();
+
+        // Trigger data refetch in CampaignsPage (no page reload needed)
+        campaignsRef.current?.refresh();
+
+        if (data.accountsOnly) {
+          // Lightweight refresh -- just accounts list updated
+        } else {
+          const parts = [];
+          if (data.campaignsSynced != null) parts.push(`${data.campaignsSynced} campaigns`);
+          if (data.adSetsSynced != null) parts.push(`${data.adSetsSynced} ad sets`);
+          if (data.adsSynced != null) parts.push(`${data.adsSynced} ads`);
+          alert(`✅ Sync complete!\n\n${parts.join('\n')}`);
+        }
       } else {
         const errorMsg = data.details || data.error || 'Unknown error';
         console.error('Sync error details:', data);
-        alert(`❌ Sync failed:\n\n${errorMsg}\n\nCheck browser console for more details.`);
+        alert(`❌ Sync failed:\n\n${errorMsg}`);
       }
     } catch (error: any) {
       console.error('Sync error:', error);
@@ -73,6 +82,10 @@ export default function DashboardContent({ userEmail, userName }: DashboardConte
       setSyncing(false);
     }
   };
+
+  const selectedAccountName = selectedAccount === 'all'
+    ? null
+    : accounts.find(a => a.id === selectedAccount)?.name;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
@@ -137,7 +150,13 @@ export default function DashboardContent({ userEmail, userName }: DashboardConte
               <svg className={`h-4 w-4 sm:h-5 sm:w-5 ${syncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
-              <span className="hidden sm:inline">{syncing ? 'Syncing...' : 'Sync Data'}</span>
+              <span className="hidden sm:inline">
+                {syncing
+                  ? 'Syncing...'
+                  : selectedAccountName
+                  ? `Sync ${selectedAccountName}`
+                  : 'Refresh Accounts'}
+              </span>
               <span className="sm:hidden">{syncing ? 'Sync...' : 'Sync'}</span>
             </button>
           </div>
@@ -146,6 +165,7 @@ export default function DashboardContent({ userEmail, userName }: DashboardConte
         {/* Campaigns Page */}
         <main className="flex-1 overflow-hidden">
           <CampaignsPage
+            ref={campaignsRef}
             selectedAccount={selectedAccount}
             accounts={accounts}
             onAccountChange={setSelectedAccount}
