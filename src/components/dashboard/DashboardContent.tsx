@@ -55,7 +55,9 @@ export default function DashboardContent({ userEmail, userName }: DashboardConte
         
         // Show success message
         const accountsText = data.accountsSynced === 1 ? 'account' : 'accounts';
-        alert(`✅ Data synced successfully!\n\nSynced ${data.accountsSynced} ${accountsText}\n\nRefreshing dashboard...`);
+        const adSetsText = data.adSetsSynced != null ? `\n${data.adSetsSynced} ad sets` : '';
+        const adsText = data.adsSynced != null ? `\n${data.adsSynced} ads` : '';
+        alert(`✅ Data synced successfully!\n\nSynced ${data.accountsSynced} ${accountsText}${adSetsText}${adsText}\n\nRefreshing dashboard...`);
         
         // Refresh the page to load new data
         window.location.reload();
