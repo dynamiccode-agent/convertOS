@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/prisma';
+import { getDateRangeFilter } from '@/lib/dateRangeHelper';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,10 +11,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { searchParams } = new URL(request.url);
+    const { searchParams} = new URL(request.url);
     const accountId = searchParams.get('accountId');
     const campaignId = searchParams.get('campaignId');
     const adsetId = searchParams.get('adsetId');
+    const dateRange = searchParams.get('dateRange') || 'last_7d';
 
     // Build where clause
     const where: any = {};
@@ -33,12 +35,19 @@ export async function GET(request: NextRequest) {
       orderBy: { name: 'asc' },
     });
 
-    // Get latest insights for each ad
+    // Get date range filter
+    const { start, end } = getDateRangeFilter(dateRange);
+
+    // Get insights within date range
     const adIds = ads.map(ad => ad.adId);
     const insights = await prisma.metaInsight.findMany({
       where: {
         entityId: { in: adIds },
         entityType: 'ad',
+        dateStart: {
+          gte: start,
+          lte: end,
+        },
       },
       orderBy: { dateStart: 'desc' },
     });

@@ -66,22 +66,22 @@ export default function CampaignsPage({ selectedAccount, accounts, onAccountChan
   const fetchAllData = async () => {
     setLoading(true);
     try {
-      // Fetch campaigns
-      const campaignsRes = await fetch(`/api/meta-ads/campaigns?accountId=${selectedAccount}`);
+      // Fetch campaigns with date range
+      const campaignsRes = await fetch(`/api/meta-ads/campaigns?accountId=${selectedAccount}&dateRange=${dateRange}`);
       if (campaignsRes.ok) {
         const campaignsData = await campaignsRes.json();
         setCampaigns(campaignsData.campaigns || []);
       }
 
-      // Fetch ad sets
-      const adSetsRes = await fetch(`/api/meta-ads/adsets?accountId=${selectedAccount}`);
+      // Fetch ad sets with date range
+      const adSetsRes = await fetch(`/api/meta-ads/adsets?accountId=${selectedAccount}&dateRange=${dateRange}`);
       if (adSetsRes.ok) {
         const adSetsData = await adSetsRes.json();
         setAdSets(adSetsData.adSets || []);
       }
 
-      // Fetch ads
-      const adsRes = await fetch(`/api/meta-ads/ads?accountId=${selectedAccount}`);
+      // Fetch ads with date range
+      const adsRes = await fetch(`/api/meta-ads/ads?accountId=${selectedAccount}&dateRange=${dateRange}`);
       if (adsRes.ok) {
         const adsData = await adsRes.json();
         setAds(adsData.ads || []);
