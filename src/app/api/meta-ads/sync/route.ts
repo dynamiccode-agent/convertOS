@@ -9,8 +9,9 @@ export const dynamic = 'force-dynamic';
 const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
 const META_API_VERSION = process.env.META_API_VERSION || 'v24.0';
 
-// Statuses where fetching insights is pointless (no recent data)
-const SKIP_INSIGHT_STATUSES = new Set(['DELETED', 'ARCHIVED']);
+// Only fetch insights for entities that are currently delivering.
+// Paused / stopped entities retain their last-known insight data in the DB.
+const ACTIVE_INSIGHT_STATUSES = new Set(['ACTIVE', 'WITH_ISSUES']);
 
 interface MetaAccount {
   id: string;
@@ -185,10 +186,12 @@ async function fetchInsightsBatch(
   datePreset: string,
   batchSize: number = 10,
 ) {
-  // Filter out entities where insights would be empty
+  // Only fetch insights for entities that are actively delivering
   const eligible = items.filter(
-    item => !SKIP_INSIGHT_STATUSES.has(item.effectiveStatus || '')
+    item => ACTIVE_INSIGHT_STATUSES.has(item.effectiveStatus || '')
   );
+
+  console.log(`[Sync] Fetching insights for ${eligible.length}/${items.length} active ${entityType}s`);
 
   for (let i = 0; i < eligible.length; i += batchSize) {
     const batch = eligible.slice(i, i + batchSize);

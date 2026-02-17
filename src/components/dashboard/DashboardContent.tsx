@@ -53,6 +53,17 @@ export default function DashboardContent({ userEmail, userName }: DashboardConte
         }),
       });
 
+      // Guard against non-JSON responses (e.g. Vercel timeout HTML pages)
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await response.text();
+        throw new Error(
+          response.status === 504 || text.includes('FUNCTION_INVOCATION_TIMEOUT')
+            ? 'Sync timed out. Try syncing a single account instead of all.'
+            : `Server returned unexpected response (${response.status})`
+        );
+      }
+
       const data = await response.json();
       if (data.success) {
         setLastSynced(new Date().toLocaleString());
