@@ -447,3 +447,40 @@ model Contact {
   @@index([contactType])
   @@index([status])
 }
+
+// ──────────────────────────────────────────────────
+// ConvertOS Agent Models
+// ──────────────────────────────────────────────────
+
+model AgentExecution {
+  id              String    @id @default(cuid())
+  accountId       String
+  executionType   String
+  entityLevel     String
+  entityId        String?
+  beforeState     Json?
+  afterState      Json?
+  reason          String    @db.Text
+  riskLevel       String
+  approvedBy      String?
+  approvedAt      DateTime?
+  status          String    // pending | approved | executed | failed
+  executedAt      DateTime?
+  executionError  String?   @db.Text
+  createdAt       DateTime  @default(now())
+  
+  @@index([accountId, createdAt])
+  @@index([status, accountId])
+}
+
+model AgentConfig {
+  id                    String   @id @default(cuid())
+  accountId             String   @unique
+  highSpendThreshold    Decimal  @default(150) @db.Decimal(10, 2)
+  recentLaunchDays      Int      @default(7)
+  frequencyThreshold    Float    @default(3.5)
+  maxChangesPerBatch    Int      @default(5)
+  allowLearningEdits    Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}

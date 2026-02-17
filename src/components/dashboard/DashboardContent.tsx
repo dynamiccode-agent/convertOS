@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import AccountSidebar from "./AccountSidebar";
 import CampaignsPage, { CampaignsPageHandle } from "./CampaignsPage";
+import AgentPanel from "./AgentPanel";
 
 interface DashboardContentProps {
   userEmail?: string | null;
@@ -183,6 +184,11 @@ export default function DashboardContent({ userEmail, userName }: DashboardConte
           />
         </main>
       </div>
+
+      {/* AI Agent Panel (Deckmasters only) */}
+      {selectedAccount === 'act_2280056309010044' && (
+        <AgentPanel accountId={selectedAccount} userEmail={userEmail || undefined} />
+      )}
     </div>
   );
 }
