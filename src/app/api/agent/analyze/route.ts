@@ -83,6 +83,24 @@ export async function POST(request: Request) {
 
     console.log(`[Agent] Account averages: CPL $${accountAvgCPL.toFixed(2)}, CTR ${(accountAvgCTR * 100).toFixed(2)}%`);
 
+    // Safety Enhancement 1: Minimum Data Thresholds
+    const MIN_SPEND_FOR_PAUSE = 20; // $20 minimum
+    const MIN_IMPRESSIONS_FOR_PAUSE = 1000;
+    const MAX_DATA_AGE_MINUTES = 60;
+
+    // Check data freshness
+    const account = await prisma.metaAdAccount.findUnique({
+      where: { accountId },
+    });
+
+    let dataFreshness = 'fresh';
+    if (account?.lastSyncedAt) {
+      const minutesSinceSync = (Date.now() - account.lastSyncedAt.getTime()) / (60 * 1000);
+      if (minutesSinceSync > MAX_DATA_AGE_MINUTES) {
+        dataFreshness = 'stale';
+      }
+    }
+
     // Analyze each ad
     const recommendations: any[] = [];
 
@@ -109,6 +127,9 @@ export async function POST(request: Request) {
 
       const isRecentLaunch = daysSinceLaunch < config.recentLaunchDays;
 
+      // Safety Enhancement 1: Check minimum data threshold
+      const hasMinimumData = adSpend >= MIN_SPEND_FOR_PAUSE && adImpressions >= MIN_IMPRESSIONS_FOR_PAUSE;
+
       // Detect underperforming ads
       const isUnderperforming = 
         (adCPL > accountAvgCPL * 1.3 && accountAvgCPL > 0) ||
@@ -120,38 +141,91 @@ export async function POST(request: Request) {
       // Detect high spend
       const isHighSpend = adSpend > Number(config.highSpendThreshold);
 
-      // Generate recommendations
-      if (hasFatigue && ad.effectiveStatus === 'ACTIVE') {
-        const riskLevel = isHighSpend ? 'high' : 'medium';
-        recommendations.push({
-          id: `pause-${ad.adId}`,
-          type: 'pause_ad',
-          entity_level: 'ad',
-          entity_id: ad.adId,
-          reason: `Frequency fatigue detected (${adFrequency.toFixed(2)} > ${config.frequencyThreshold}). ${isHighSpend ? `High spend: $${adSpend.toFixed(2)} last 7d.` : ''} CPL: $${adCPL.toFixed(2)} vs account avg $${accountAvgCPL.toFixed(2)}.`,
-          risk_level: riskLevel,
-          preview: {
-            current_state: `ACTIVE, spend: $${adSpend.toFixed(2)}, CPL: $${adCPL.toFixed(2)}, frequency: ${adFrequency.toFixed(2)}`,
-            proposed_state: 'PAUSED (preserve learning data)',
-          },
-        });
-      } else if (isUnderperforming && !isRecentLaunch && ad.effectiveStatus === 'ACTIVE') {
-        const riskLevel = isHighSpend ? 'high' : 'low';
-        const cplDiff = accountAvgCPL > 0 ? ((adCPL - accountAvgCPL) / accountAvgCPL * 100).toFixed(0) : 0;
-        const ctrDiff = accountAvgCTR > 0 ? ((adCTR - accountAvgCTR) / accountAvgCTR * 100).toFixed(0) : 0;
+      // Safety Enhancement 2: Check if last active ad in ad set
+      const activeAdsInSameAdSet = ads.filter(
+        a => a.adsetId === ad.adsetId && a.effectiveStatus === 'ACTIVE'
+      );
+      const isLastActiveAd = activeAdsInSameAdSet.length === 1;
 
-        recommendations.push({
-          id: `pause-underperform-${ad.adId}`,
-          type: 'pause_ad',
-          entity_level: 'ad',
-          entity_id: ad.adId,
-          reason: `Underperforming: CPL $${adCPL.toFixed(2)} (+${cplDiff}% vs avg), CTR ${(adCTR * 100).toFixed(2)}% (${ctrDiff}% vs avg). ${isHighSpend ? `High spend: $${adSpend.toFixed(2)}.` : ''}`,
-          risk_level: riskLevel,
-          preview: {
-            current_state: `ACTIVE, spend: $${adSpend.toFixed(2)}, CPL: $${adCPL.toFixed(2)}`,
-            proposed_state: 'PAUSED',
-          },
-        });
+      // Generate recommendations (with safety checks)
+      if (hasFatigue && ad.effectiveStatus === 'ACTIVE') {
+        // Safety check: minimum data threshold
+        if (!hasMinimumData) {
+          recommendations.push({
+            id: `monitor-${ad.adId}`,
+            type: 'monitor',
+            entity_level: 'ad',
+            entity_id: ad.adId,
+            reason: `Frequency fatigue detected (${adFrequency.toFixed(2)} > ${config.frequencyThreshold}), but insufficient data (spend: $${adSpend.toFixed(2)}, impressions: ${adImpressions}). MONITOR - do not pause yet.`,
+            risk_level: 'low',
+            preview: {
+              current_state: `ACTIVE, spend: $${adSpend.toFixed(2)}, frequency: ${adFrequency.toFixed(2)}`,
+              proposed_state: 'MONITOR (wait for more data)',
+            },
+          });
+        } else {
+          // Escalate risk if last active ad
+          let riskLevel = isHighSpend ? 'high' : 'medium';
+          let warning = '';
+          
+          if (isLastActiveAd) {
+            riskLevel = 'high';
+            warning = ' ⚠️ LAST ACTIVE AD IN AD SET - pausing will stop delivery.';
+          }
+
+          recommendations.push({
+            id: `pause-${ad.adId}`,
+            type: 'pause_ad',
+            entity_level: 'ad',
+            entity_id: ad.adId,
+            reason: `Frequency fatigue detected (${adFrequency.toFixed(2)} > ${config.frequencyThreshold}). ${isHighSpend ? `High spend: $${adSpend.toFixed(2)} last 7d.` : ''} CPL: $${adCPL.toFixed(2)} vs account avg $${accountAvgCPL.toFixed(2)}.${warning}`,
+            risk_level: riskLevel,
+            preview: {
+              current_state: `ACTIVE, spend: $${adSpend.toFixed(2)}, CPL: $${adCPL.toFixed(2)}, frequency: ${adFrequency.toFixed(2)}`,
+              proposed_state: 'PAUSED (preserve learning data)',
+            },
+          });
+        }
+      } else if (isUnderperforming && !isRecentLaunch && ad.effectiveStatus === 'ACTIVE') {
+        // Safety check: minimum data threshold
+        if (!hasMinimumData) {
+          recommendations.push({
+            id: `monitor-underperform-${ad.adId}`,
+            type: 'monitor',
+            entity_level: 'ad',
+            entity_id: ad.adId,
+            reason: `Appears underperforming but insufficient data (spend: $${adSpend.toFixed(2)}, impressions: ${adImpressions}). MONITOR - wait for statistical significance.`,
+            risk_level: 'low',
+            preview: {
+              current_state: `ACTIVE, spend: $${adSpend.toFixed(2)}, CPL: $${adCPL.toFixed(2)}`,
+              proposed_state: 'MONITOR (wait for more data)',
+            },
+          });
+        } else {
+          let riskLevel = isHighSpend ? 'high' : 'low';
+          let warning = '';
+          
+          if (isLastActiveAd) {
+            riskLevel = 'high';
+            warning = ' ⚠️ LAST ACTIVE AD IN AD SET - pausing will stop delivery.';
+          }
+
+          const cplDiff = accountAvgCPL > 0 ? ((adCPL - accountAvgCPL) / accountAvgCPL * 100).toFixed(0) : 0;
+          const ctrDiff = accountAvgCTR > 0 ? ((adCTR - accountAvgCTR) / accountAvgCTR * 100).toFixed(0) : 0;
+
+          recommendations.push({
+            id: `pause-underperform-${ad.adId}`,
+            type: 'pause_ad',
+            entity_level: 'ad',
+            entity_id: ad.adId,
+            reason: `Underperforming: CPL $${adCPL.toFixed(2)} (+${cplDiff}% vs avg), CTR ${(adCTR * 100).toFixed(2)}% (${ctrDiff}% vs avg). ${isHighSpend ? `High spend: $${adSpend.toFixed(2)}.` : ''}${warning}`,
+            risk_level: riskLevel,
+            preview: {
+              current_state: `ACTIVE, spend: $${adSpend.toFixed(2)}, CPL: $${adCPL.toFixed(2)}`,
+              proposed_state: 'PAUSED',
+            },
+          });
+        }
       }
     }
 
@@ -212,11 +286,22 @@ export async function POST(request: Request) {
     }
 
     // Generate summary
-    const summary = `Deckmasters Analysis (${datePreset}): ${recommendations.length} recommendations generated. Account avg CPL: $${accountAvgCPL.toFixed(2)}, CTR: ${(accountAvgCTR * 100).toFixed(2)}%. ${ads.filter(a => a.effectiveStatus === 'ACTIVE').length} active ads analyzed.`;
+    let summary = `Deckmasters Analysis (${datePreset}): ${recommendations.length} recommendations generated. Account avg CPL: $${accountAvgCPL.toFixed(2)}, CTR: ${(accountAvgCTR * 100).toFixed(2)}%. ${ads.filter(a => a.effectiveStatus === 'ACTIVE').length} active ads analyzed.`;
+
+    // Add data freshness warning
+    if (dataFreshness === 'stale') {
+      summary += ` ⚠️ DATA IS STALE (last sync: ${account?.lastSyncedAt ? new Date(account.lastSyncedAt).toLocaleString() : 'unknown'}). Sync before executing.`;
+    }
+
+    // Filter only actionable recommendations (exclude 'monitor')
+    const actionableRecs = recommendations.filter(r => r.type !== 'monitor');
+    const monitorRecs = recommendations.filter(r => r.type === 'monitor');
 
     return NextResponse.json({
       analysis_summary: summary,
-      recommendations: recommendations.slice(0, config.maxChangesPerBatch),
+      data_freshness: dataFreshness,
+      recommendations: actionableRecs.slice(0, config.maxChangesPerBatch),
+      monitor_recommendations: monitorRecs,
     });
   } catch (error: any) {
     console.error('[Agent] Analysis error:', error);

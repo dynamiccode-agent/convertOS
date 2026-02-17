@@ -66,7 +66,25 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
+    // Safety Enhancement 3: Check data freshness before execution
+    const account = await prisma.metaAdAccount.findUnique({
+      where: { accountId },
+    });
+
+    const MAX_DATA_AGE_MINUTES = 60;
+    if (account?.lastSyncedAt) {
+      const minutesSinceSync = (Date.now() - account.lastSyncedAt.getTime()) / (60 * 1000);
+      if (minutesSinceSync > MAX_DATA_AGE_MINUTES) {
+        return NextResponse.json({
+          error: 'DATA STALE',
+          details: `Last sync was ${Math.round(minutesSinceSync)} minutes ago. Sync required before execution.`,
+          last_synced: account.lastSyncedAt,
+        }, { status: 412 }); // 412 Precondition Failed
+      }
+    }
+
     const results = [];
+    const executionBatchId = `batch-${Date.now()}`; // Correlation ID
 
     for (const rec of recommendations) {
       const { id, type, entity_id, reason, risk_level } = rec;
@@ -95,6 +113,9 @@ export async function POST(request: Request) {
       let afterState: any = null;
       let executionError: string | null = null;
       let executionStatus = 'pending';
+      let requestPayload: any = null;
+      let responseHeaders: any = null;
+      const executionStartTime = Date.now();
 
       try {
         // Get before state
@@ -108,6 +129,14 @@ export async function POST(request: Request) {
         // Check learning phase (if applicable)
         // Simplified check - in production, check campaign's delivery_info.status_reason
         // For now, allow execution since we don't have campaign relations set up
+
+        // Capture request payload for audit
+        requestPayload = {
+          type,
+          entity_id,
+          timestamp: new Date().toISOString(),
+          batch_id: executionBatchId,
+        };
 
         // Execute based on type
         let metaResponse: any = null;
@@ -149,6 +178,8 @@ export async function POST(request: Request) {
             metaResponse = { success: false, error: 'Unsupported type' };
         }
 
+        const executionLatencyMs = Date.now() - executionStartTime;
+
         if (metaResponse.success) {
           executionStatus = 'executed';
 
@@ -162,21 +193,34 @@ export async function POST(request: Request) {
             afterState = metaResponse.data;
           }
 
+          // Capture response metadata
+          responseHeaders = {
+            success: true,
+            latency_ms: executionLatencyMs,
+          };
+
           results.push({
             recommendation_id: id,
             status: 'success',
             entity_id,
             meta_response: metaResponse.data,
+            latency_ms: executionLatencyMs,
           });
         } else {
           executionStatus = 'failed';
           executionError = metaResponse.error || 'Unknown error';
+
+          responseHeaders = {
+            success: false,
+            latency_ms: executionLatencyMs,
+          };
 
           results.push({
             recommendation_id: id,
             status: 'failed',
             entity_id,
             error: executionError,
+            latency_ms: executionLatencyMs,
           });
         }
       } catch (error: any) {
@@ -190,15 +234,30 @@ export async function POST(request: Request) {
           error: executionError,
         });
       } finally {
-        // Log execution to audit table
+        // Enhanced audit logging
         await prisma.agentExecution.create({
           data: {
             accountId,
             executionType: type,
             entityLevel: rec.entity_level || 'unknown',
             entityId: entity_id || null,
-            beforeState: beforeState,
-            afterState: afterState,
+            beforeState: beforeState ? {
+              ...beforeState,
+              _metadata: {
+                captured_at: new Date().toISOString(),
+                batch_id: executionBatchId,
+              },
+            } : null,
+            afterState: afterState ? {
+              ...afterState,
+              _metadata: {
+                captured_at: new Date().toISOString(),
+                batch_id: executionBatchId,
+                request_payload: requestPayload,
+                response_headers: responseHeaders,
+                latency_ms: responseHeaders?.latency_ms,
+              },
+            } : null,
             reason,
             riskLevel: risk_level || 'unknown',
             approvedBy,

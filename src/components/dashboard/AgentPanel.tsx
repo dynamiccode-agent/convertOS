@@ -30,7 +30,9 @@ export default function AgentPanel({ accountId, userEmail }: AgentPanelProps) {
   const [analyzing, setAnalyzing] = useState(false);
   const [executing, setExecuting] = useState(false);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [monitorRecommendations, setMonitorRecommendations] = useState<Recommendation[]>([]);
   const [analysisSummary, setAnalysisSummary] = useState<string>("");
+  const [dataFreshness, setDataFreshness] = useState<string>("unknown");
   const [executionResults, setExecutionResults] = useState<any>(null);
   const [selectedRecs, setSelectedRecs] = useState<Set<string>>(new Set());
 
@@ -48,7 +50,9 @@ export default function AgentPanel({ accountId, userEmail }: AgentPanelProps) {
 
       if (response.ok) {
         setRecommendations(data.recommendations || []);
+        setMonitorRecommendations(data.monitor_recommendations || []);
         setAnalysisSummary(data.analysis_summary || '');
+        setDataFreshness(data.data_freshness || 'unknown');
         setSelectedRecs(new Set(data.recommendations.map((r: Recommendation) => r.id)));
       } else {
         alert(`Analysis failed: ${data.error || 'Unknown error'}`);
@@ -163,20 +167,40 @@ export default function AgentPanel({ accountId, userEmail }: AgentPanelProps) {
 
       {/* Summary */}
       {analysisSummary && (
-        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border-b border-gray-200 dark:border-gray-700">
-          <p className="text-sm text-blue-900 dark:text-blue-100">{analysisSummary}</p>
+        <div className={`p-4 border-b border-gray-200 dark:border-gray-700 ${
+          dataFreshness === 'stale' 
+            ? 'bg-red-50 dark:bg-red-900/20' 
+            : 'bg-blue-50 dark:bg-blue-900/20'
+        }`}>
+          <p className={`text-sm ${
+            dataFreshness === 'stale'
+              ? 'text-red-900 dark:text-red-100'
+              : 'text-blue-900 dark:text-blue-100'
+          }`}>
+            {analysisSummary}
+          </p>
+          {dataFreshness === 'stale' && (
+            <p className="text-xs text-red-700 dark:text-red-300 mt-2 font-semibold">
+              ⚠️ Execution blocked - sync required before making changes
+            </p>
+          )}
         </div>
       )}
 
       {/* Recommendations List */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {recommendations.length === 0 ? (
+        {recommendations.length === 0 && monitorRecommendations.length === 0 ? (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">
             <p className="text-4xl mb-2">💡</p>
             <p className="text-sm">Click "Run Analysis" to get AI-powered recommendations</p>
           </div>
         ) : (
-          recommendations.map((rec) => (
+          <>
+            {/* Actionable Recommendations */}
+            {recommendations.length > 0 && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Actionable ({recommendations.length})</h3>
+                {recommendations.map((rec) => (
             <div
               key={rec.id}
               className={`border rounded-lg p-4 ${selectedRecs.has(rec.id) ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/10' : 'border-gray-200 dark:border-gray-700'}`}
@@ -231,7 +255,49 @@ export default function AgentPanel({ accountId, userEmail }: AgentPanelProps) {
                 </div>
               </div>
             </div>
-          ))
+          ))}
+              </div>
+            )}
+
+            {/* Monitor Recommendations (not actionable yet) */}
+            {monitorRecommendations.length > 0 && (
+              <div className="space-y-4 mt-6">
+                <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400">Monitor (insufficient data) ({monitorRecommendations.length})</h3>
+                {monitorRecommendations.map((rec) => (
+                  <div
+                    key={rec.id}
+                    className="border border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-800/50 opacity-75"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-semibold px-2 py-1 rounded border border-gray-400 bg-gray-100 text-gray-700">
+                            MONITOR
+                          </span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {rec.type?.replace(/_/g, ' ').toUpperCase()}
+                          </span>
+                        </div>
+                        
+                        <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">{rec.reason}</p>
+                        
+                        <div className="text-xs space-y-1">
+                          <div className="flex items-start gap-2">
+                            <span className="text-gray-500">Current:</span>
+                            <span className="text-gray-600 dark:text-gray-400">{rec.preview.current_state}</span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <span className="text-gray-500">Action:</span>
+                            <span className="text-gray-700 dark:text-gray-300 font-medium">{rec.preview.proposed_state}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -240,7 +306,7 @@ export default function AgentPanel({ accountId, userEmail }: AgentPanelProps) {
         <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
           <button
             onClick={handleExecute}
-            disabled={executing || selectedRecs.size === 0}
+            disabled={executing || selectedRecs.size === 0 || dataFreshness === 'stale'}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
           >
             {executing ? (
