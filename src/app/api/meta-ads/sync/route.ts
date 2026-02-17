@@ -306,9 +306,9 @@ async function syncAccount(accountId: string, datePreset: string) {
     datePreset,
   );
 
-  // Ads (account-level)
+  // Ads (account-level) — lower limit because creative{} expansion makes payloads large
   const ads = await fetchAllPages<MetaAd>(
-    `https://graph.facebook.com/${META_API_VERSION}/${accountId}/ads?fields=id,name,adset_id,campaign_id,status,effective_status,creative{id,title,body,image_url,thumbnail_url},created_time&access_token=${META_ACCESS_TOKEN}&limit=500`
+    `https://graph.facebook.com/${META_API_VERSION}/${accountId}/ads?fields=id,name,adset_id,campaign_id,status,effective_status,creative{id,title,body,image_url,thumbnail_url},created_time&access_token=${META_ACCESS_TOKEN}&limit=200`
   );
 
   console.log(`[Sync] Account ${accountId}: ${ads.length} ads`);
